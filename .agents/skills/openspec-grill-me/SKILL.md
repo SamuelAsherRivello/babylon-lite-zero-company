@@ -1,9 +1,9 @@
 ---
-name: open-spec-grill-me
+name: openspec-grill-me
 description: Interview the user about an OpenSpec exploration, proposal, or standalone plan using consistent numbered choices and a recommended answer. Investigate codebase facts directly and reconcile confirmed decisions into authorized planning artifacts. Planning only; never implements code.
 ---
 
-# Open Spec Grill Me
+# OpenSpec Grill Me
 
 Resolve material ambiguity through an adaptive, one-question-at-a-time
 interview. Turn confirmed decisions into coherent planning artifacts when
@@ -74,7 +74,7 @@ settled decisions unnecessarily.
 
 - A single positive integer supplied as the invocation argument is the
   maximum number of substantive questions:
-  `$open-spec-grill-me 3` means at most three questions.
+  `$openspec-grill-me 3` means at most three questions.
 - A number replying to a pending question selects that question's option;
   it does not reset the budget.
 - Honor explicit limits such as "ask me five questions."
