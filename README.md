@@ -96,7 +96,7 @@ Here is the project details ...
 ### 💡 Contributors
 
 <!-- AI: Preserve existing contributor credit and add contributors only when confirmed. Do not automatically advance experience counts or their reference year. -->
-- Samuel Asher Rivello - Over 25 years of game development experience as of 2026
+- Samuel Asher Rivello - Over 25 years of game development XP (2026)
 
 ### 💡 Contact
 
