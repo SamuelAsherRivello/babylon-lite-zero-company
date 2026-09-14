@@ -32,10 +32,18 @@ jobs:
         run: npm test
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
+      - name: Build demo
+        working-directory: project-name
+        run: npm run build
+      - name: Prepare demo artifact
+        run: |
+          mkdir -p _site
+          cp -R project-name/dist/. _site/
+          cp version.txt _site/version.txt
       - name: Upload demo
         uses: actions/upload-pages-artifact@v3
         with:
-          path: project-name/src
+          path: _site
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

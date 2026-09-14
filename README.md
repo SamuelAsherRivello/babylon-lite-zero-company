@@ -1,17 +1,26 @@
 <!-- AI: Customize this template from the target repository's actual files, configuration, and user instructions. Preserve the section order, heading styles, and concise format unless asked to change them. Replace placeholders only with verified information; leave unknown values as placeholders. Do not invent features, commands, URLs, contributors, or deployment behavior. Keep these instructions hidden as HTML comments. -->
-<!-- AI: Directory boundary: this repository root is for Git commands and repository metadata (for example, README.md, LICENSE, .github/, .agents/, and .openspec/). project-name/ is the project root. Unless a task explicitly concerns repo-level files, run source, configuration, dependency, build, test, and run commands from project-name/ and put project work there. Correct: run git status at the repository root, then a verified project command in project-name/. Incorrect: treating the repository root as the project root because it contains .git. -->
+<!-- AI: Directory boundary: this repository root is for Git commands and repository metadata (for example, README.md, LICENSE, .github/, .agents/, and .openspec/). {project-name}/ is the project root. Unless a task explicitly concerns repo-level files, run source, configuration, dependency, build, test, and run commands from {project-name}/ and put project work there. Correct: run git status at the repository root, then a verified project command in {project-name}/. Incorrect: treating the repository root as the project root because it contains .git. -->
 <!-- AI: Preserve the creator banner unless a replacement is requested. Update its relative path if assets move and verify the file exists with matching filename capitalization. -->
-![Samuel Asher Rivello](project-name/documentation/samuel-asher-rivello-banner.png)
+![Samuel Asher Rivello]({project-name}/documentation/samuel-asher-rivello-banner.png)
 
-# project-name
+# {project-name}
 
-<!-- AI: Replace project-name with the requested project display name. Write one short introduction sentence explaining what the project does and who it is for, based on implemented behavior. -->
+<!-- AI: Replace {project-name} with the requested project display name. Write one short introduction sentence explaining what the project does and who it is for, based on implemented behavior. -->
 Here is the project introduction sentence.
+
+## Using This Template with AI
+
+If user directs you to use this template, read
+[AI Repository Guidance](AGENTS.md), then complete the
+[AI Template Usage Checklist](AGENTS_TEMPLATE_USAGE_CHECKLIST.md) before
+choosing a stack or changing project files. Use GitHub's **Use this template**
+flow for an authorized new GitHub repository; treat requests for inspiration as
+reference-only unless the user asks to copy this template.
 
 ## Images
 
 <!-- AI: Use screenshots that exist in this repository and represent the current project. Keep relative paths, matching link href and image src, and the 400-pixel preview width. Replace placeholder alt text with a brief description. Preserve image order unless instructed otherwise; do not invent asset paths. -->
-<a href="project-name/documentation/screenshot01.png"><img src="project-name/documentation/screenshot01.png" width="400" alt="Screenshot placeholder" /></a>
+<a href="{project-name}/documentation/screenshot01.png"><img src="{project-name}/documentation/screenshot01.png" width="400" alt="Screenshot placeholder" /></a>
 
 
 ## Live Demo
@@ -23,7 +32,7 @@ Here is the getting started ... &#x20;
 
 ## Table of Contents
 
-<!-- AI: Keep this list synchronized with the top-level sections below it and their Markdown anchors. Exclude the title, Images, Demo, and Table of Contents because they appear above or here. Do not add subsection entries unless requested. -->
+<!-- AI: Keep this list synchronized with the top-level sections below it and their Markdown anchors. Exclude the title, Using This Template with AI, Images, Demo, and Table of Contents because they appear above or here. Do not add subsection entries unless requested. -->
 1. [Getting Started](#getting-started)
 2. [Project Overview](#project-overview)
 3. [Project Details](#project-details)
@@ -59,14 +68,13 @@ Here is the project overview...
 
 <!-- AI: Link to the main documentation files that actually exist using relative Markdown links and a short purpose for each. Update links when files move; do not reference documentation inherited from another project unless present here. -->
 - `README.md`: Primary documentation for this repo.
-- [Template Checklist](TEMPLATE_CHECKLIST.md): First-use setup checklist.
 - [Contributing](CONTRIBUTING.md): Contribution and verification guidance.
 - [Security Policy](SECURITY.md): Private vulnerability-reporting guidance.
 
 ### 📝 Structure
 
-<!-- AI: Replace project-name with the actual main project directory and list only the few folders needed to understand the repository. Check paths and capitalization. Omit generated output, dependency folders, and exhaustive file inventories. -->
-- `project-name`: Main project folder.
+<!-- AI: Replace {project-name} with the actual main project directory and list only the few folders needed to understand the repository. Check paths and capitalization. Omit generated output, dependency folders, and exhaustive file inventories. -->
+- `{project-name}`: Main project folder.
 
 
 

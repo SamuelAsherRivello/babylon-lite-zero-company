@@ -3,22 +3,79 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>project-name</title>
+    <title>PROJECT_NAME</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+
+      #ui_layer {
+        --edge-height: 32px;
+        position: fixed;
+        inset: 5%;
+        display: grid;
+        grid-template-rows: var(--edge-height) minmax(0, 1fr) var(--edge-height);
+      }
+
+      #header,
+      #body,
+      #footer {
+        width: 100%;
+      }
+
+      #header,
+      #footer {
+        display: flex;
+      }
+
+      #header {
+        align-items: flex-start;
+        justify-content: space-between;
+        color: black;
+        font-size: 10pt;
+      }
+
+      #header a,
+      #header a:visited {
+        color: black;
+      }
+
+      #body {
+        color: black;
+        font-size: 10pt;
+      }
+
+      #footer {
+        align-items: flex-end;
+        justify-content: flex-end;
+        color: black;
+        font-size: 10pt;
+      }
+    </style>
   </head>
   <body>
     <!-- Game engine content belongs in content_layer when a game engine exists. -->
     <div id="content_layer"></div>
 
     <!-- Any UI, HTML, React, or user-interface content belongs in ui_layer. -->
-    <div id="ui_layer" style="position: absolute; inset: 5%;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-        <div style="font-size: 20pt;">project-name</div>
-        <a href="https://github.com/SamuelAsherRivello/github-repository-template" aria-label="View the repository on GitHub">
-          <svg aria-hidden="true" viewBox="0 0 16 16" width="20" height="20" fill="currentColor">
+    <div id="ui_layer">
+      <header id="header">
+        <div id="project_title">project-name</div>
+        <a href="https://github.com/SamuelAsherRivello/github-repository-template" target="_blank" rel="noopener noreferrer" aria-label="View the repository on GitHub">
+          <svg aria-hidden="true" viewBox="0 0 16 16" width="20" height="20" fill="black">
             <path d="M8 0C3.58 0 0 3.64 0 8.13c0 3.59 2.29 6.64 5.47 7.71.4.08.55-.18.55-.4 0-.2-.01-.86-.01-1.56-2.01.38-2.53-.5-2.69-.96-.09-.24-.48-.96-.82-1.15-.28-.15-.68-.53-.01-.54.63-.01 1.08.59 1.23.83.72 1.23 1.87.88 2.33.67.07-.53.28-.88.51-1.08-1.78-.21-3.64-.91-3.64-4.04 0-.89.31-1.62.82-2.19-.08-.2-.36-1.04.08-2.16 0 0 .67-.22 2.2.84A7.5 7.5 0 0 1 8 3.82c.68 0 1.36.09 2 .28 1.53-1.06 2.2-.84 2.2-.84.44 1.12.16 1.96.08 2.16.51.57.82 1.29.82 2.19 0 3.14-1.87 3.83-3.65 4.04.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .22.15.48.55.4A8.02 8.02 0 0 0 16 8.13C16 3.64 12.42 0 8 0Z" />
           </svg>
         </a>
-      </div>
+      </header>
+      <main id="body"></main>
+      <footer id="footer"><span id="version"></span></footer>
     </div>
+    <script type="module">
+      import versionText from "../version.txt?raw";
+
+      document.getElementById("version").textContent = versionText.trim().replace(/^version=/, "");
+    </script>
   </body>
 </html>
