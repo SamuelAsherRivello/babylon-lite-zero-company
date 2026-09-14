@@ -1,9 +1,8 @@
 .setup/
+
+# Local configuration. Commit examples only, never credentials.
 .env
 .env.*
-node_modules/
-dist/
-/openspec
 
-.playwright-cli/
-output/playwright/
+# Compatibility directory created by .openspec/setup.ps1.
+/openspec

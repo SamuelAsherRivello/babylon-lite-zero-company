@@ -27,17 +27,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Check types and build integration and demo
-        run: npm run build
+      - name: Test starter page
+        working-directory: project-name
+        run: npm test
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
       - name: Upload demo
         uses: actions/upload-pages-artifact@v3
         with:
-          path: packages/integration-demo/dist
+          path: project-name/src
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

@@ -1,23 +1,25 @@
 <!-- AI: Customize this template from the target repository's actual files, configuration, and user instructions. Preserve the section order, heading styles, and concise format unless asked to change them. Replace placeholders only with verified information; leave unknown values as placeholders. Do not invent features, commands, URLs, contributors, or deployment behavior. Keep these instructions hidden as HTML comments. -->
-<!-- AI: Directory boundary: this repository root is for Git commands and repository metadata (for example, README.md, LICENSE, .github/, .agents/, and .openspec/). PROJECT_NAME/ is the project root. Unless a task explicitly concerns repo-level files, run source, configuration, dependency, build, test, and run commands from PROJECT_NAME/ and put project work there. Correct: git status at the repository root, then npm run build in PROJECT_NAME/. Incorrect: treating the repository root as the project root because it contains .git. -->
+<!-- AI: Directory boundary: this repository root is for Git commands and repository metadata (for example, README.md, LICENSE, .github/, .agents/, and .openspec/). project-name/ is the project root. Unless a task explicitly concerns repo-level files, run source, configuration, dependency, build, test, and run commands from project-name/ and put project work there. Correct: run git status at the repository root, then a verified project command in project-name/. Incorrect: treating the repository root as the project root because it contains .git. -->
 <!-- AI: Preserve the creator banner unless a replacement is requested. Update its relative path if assets move and verify the file exists with matching filename capitalization. -->
-![Samuel Asher Rivello](PROJECT_NAME/documentation/samuel-asher-rivello-banner.png)
+![Samuel Asher Rivello](project-name/documentation/samuel-asher-rivello-banner.png)
 
-# {PROJECT_NAME}
+# project-name
 
-<!-- AI: Replace {PROJECT_NAME} with the requested project display name. Write one short introduction sentence explaining what the project does and who it is for, based on implemented behavior. -->
+<!-- AI: Replace project-name with the requested project display name. Write one short introduction sentence explaining what the project does and who it is for, based on implemented behavior. -->
 Here is the project introduction sentence.
 
 ## Images
 
 <!-- AI: Use screenshots that exist in this repository and represent the current project. Keep relative paths, matching link href and image src, and the 400-pixel preview width. Replace placeholder alt text with a brief description. Preserve image order unless instructed otherwise; do not invent asset paths. -->
-<a href="PROJECT_NAME/documentation/screenshot01.png"><img src="PROJECT_NAME/documentation/screenshot01.png" width="400" alt="Screenshot placeholder" /></a>
+<a href="project-name/documentation/screenshot01.png"><img src="project-name/documentation/screenshot01.png" width="400" alt="Screenshot placeholder" /></a>
 
 
-## Demo
+## Live Demo
 
-<!-- AI: Replace both {demo_url} occurrences with the verified public demo URL. Check deployment configuration or a confirmed deployed site; do not assume a hosting URL. Keep the placeholder if no demo is available. -->
-* [{demo_url}]({demo_url})
+<!-- Update “Here is” with a concise, verified live-demo introduction. -->
+Here is the getting started ... &#x20;
+
+- [{live-demo-url}](https://github.com/SamuelAsherRivello/github-repository-template/blob/main/%7Bdemo_url%7D)
 
 ## Table of Contents
 
@@ -35,7 +37,7 @@ Here is the getting started ...
 
 ### 🛠 Build Project
 
-<!-- AI: Replace {command} with the actual build command or required editor action. Verify it against manifests, scripts, or project settings. Specify the working directory and dependency installation when necessary; do not assume npm or a particular engine. -->
+<!-- AI: Replace {command} with the actual build command or required editor action. Verify it against manifests, scripts, or project settings. Specify the working directory and dependency installation when necessary; do not assume a particular toolchain. -->
 1. Run `{command}`.
 
 ### 🛠 Run Project
@@ -57,11 +59,14 @@ Here is the project overview...
 
 <!-- AI: Link to the main documentation files that actually exist using relative Markdown links and a short purpose for each. Update links when files move; do not reference documentation inherited from another project unless present here. -->
 - `README.md`: Primary documentation for this repo.
+- [Template Checklist](TEMPLATE_CHECKLIST.md): First-use setup checklist.
+- [Contributing](CONTRIBUTING.md): Contribution and verification guidance.
+- [Security Policy](SECURITY.md): Private vulnerability-reporting guidance.
 
 ### 📝 Structure
 
-<!-- AI: Replace PROJECT_NAME with the actual main project directory and list only the few folders needed to understand the repository. Check paths and capitalization. Omit generated output, dependency folders, and exhaustive file inventories. -->
-- `PROJECT_NAME`: Main project folder.
+<!-- AI: Replace project-name with the actual main project directory and list only the few folders needed to understand the repository. Check paths and capitalization. Omit generated output, dependency folders, and exhaustive file inventories. -->
+- `project-name`: Main project folder.
 
 
 
@@ -81,7 +86,6 @@ Here is the project details ...
 ### 📦 Packages
 
 <!-- AI: List the key packages actually used, based on manifests and configuration. Link each name to its official site or documentation and describe its role briefly. Replace template examples that do not apply. Include versions only when useful and verified against the repository. -->
-- [Vite](https://vite.dev/): JavaScript bundling and local dev server.
 
 
 
