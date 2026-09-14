@@ -1,7 +1,7 @@
 <!-- AI: Customize this template from the target repository's actual files, configuration, and user instructions. Preserve the section order, heading styles, and concise format unless asked to change them. Replace placeholders only with verified information; leave unknown values as placeholders. Do not invent features, commands, URLs, contributors, or deployment behavior. Keep these instructions hidden as HTML comments. -->
-<!-- AI: Directory boundary: this repository root is for Git commands and repository metadata (for example, README.md, LICENSE, .github/, .agents/, and .openspec/). {project-name}/ is the project root. Unless a task explicitly concerns repo-level files, run source, configuration, dependency, build, test, and run commands from {project-name}/ and put project work there. Correct: run git status at the repository root, then a verified project command in {project-name}/. Incorrect: treating the repository root as the project root because it contains .git. -->
+<!-- AI: Directory boundary: this repository root is the baseline npm project root. Run Git, configuration, dependency, build, test, and run commands here. The Vite entry page, source, assets, tests, and build output belong in {project-name}/. -->
 <!-- AI: Preserve the creator banner unless a replacement is requested. Update its relative path if assets move and verify the file exists with matching filename capitalization. -->
-![Samuel Asher Rivello]({project-name}/documentation/samuel-asher-rivello-banner.png)
+![Samuel Asher Rivello](documentation/samuel-asher-rivello-banner.png)
 
 # {project-name}
 
@@ -20,7 +20,7 @@ reference-only unless the user asks to copy this template.
 ## Images
 
 <!-- AI: Use screenshots that exist in this repository and represent the current project. Keep relative paths, matching link href and image src, and the 400-pixel preview width. Replace placeholder alt text with a brief description. Preserve image order unless instructed otherwise; do not invent asset paths. -->
-<a href="{project-name}/documentation/screenshot01.png"><img src="{project-name}/documentation/screenshot01.png" width="400" alt="Screenshot placeholder" /></a>
+<a href="documentation/screenshot01.png"><img src="documentation/screenshot01.png" width="400" alt="Screenshot placeholder" /></a>
 
 
 ## Live Demo
@@ -28,7 +28,7 @@ reference-only unless the user asks to copy this template.
 <!-- Update “Here is” with a concise, verified live-demo introduction. -->
 Here is the getting started ... &#x20;
 
-- [{live-demo-url}](https://github.com/SamuelAsherRivello/github-repository-template/blob/main/%7Bdemo_url%7D)
+- [{live-demo-url}]({live-demo-url})
 
 ## Table of Contents
 
@@ -41,23 +41,23 @@ Here is the getting started ... &#x20;
 
 ## Getting Started
 
-<!-- AI: Briefly state required tools or prerequisites, using versions supported by the repository. Keep setup steps in the subsections below and use the fewest practical steps. Do not add a separate commands section. -->
-Here is the getting started ...
+<!-- AI: Update these baseline Node/npm/Vite commands if the selected stack changes. -->
+The baseline requires Node.js 24 and npm.
 
 ### 🛠 Build Project
 
-<!-- AI: Replace {command} with the actual build command or required editor action. Verify it against manifests, scripts, or project settings. Specify the working directory and dependency installation when necessary; do not assume a particular toolchain. -->
-1. Run `{command}`.
+1. From the repository root, run `npm ci`.
+2. Run `npm run build`.
 
 ### 🛠 Run Project
 
-<!-- AI: Replace {command} with the actual local launch command or editor action. State where to run it and how to open the app if needed. Refer to the printed URL when the port can vary. Avoid repeating completed build/setup steps. -->
-1. Run `{command}`.
+1. From the repository root, run `npm run dev` and open the URL Vite prints.
 
 ### 🛠 Release Version
 
-<!-- AI: Describe the repository's existing release workflow in the fewest steps, based on checked-in workflows or release scripts. Distinguish builds, tags, releases, and deployment accurately. If no release process exists, retain a placeholder rather than inventing one. Documentation edits do not authorize publishing or changing Git history. -->
-1. Run `{command}`.
+<!-- AI: Update this baseline process if the selected deployment target changes. -->
+1. Run `npm test` and `npm run build` from the repository root.
+2. Push to `main` to trigger the checked-in GitHub Pages workflow.
 
 ## Project Overview
 
@@ -73,8 +73,10 @@ Here is the project overview...
 
 ### 📝 Structure
 
-<!-- AI: Replace {project-name} with the actual main project directory and list only the few folders needed to understand the repository. Check paths and capitalization. Omit generated output, dependency folders, and exhaustive file inventories. -->
-- `{project-name}`: Main project folder.
+<!-- AI: List only the few folders needed to understand the project. Check paths and capitalization. Omit generated output, dependency folders, and exhaustive file inventories. -->
+- `{project-name}/src/`: Application source when the selected stack uses source files.
+- `{project-name}/test/`: Focused automated checks for the starter.
+- `documentation/`: Canonical README images and project documentation.
 
 
 
@@ -94,6 +96,7 @@ Here is the project details ...
 ### 📦 Packages
 
 <!-- AI: List the key packages actually used, based on manifests and configuration. Link each name to its official site or documentation and describe its role briefly. Replace template examples that do not apply. Include versions only when useful and verified against the repository. -->
+- [Vite](https://vite.dev/): Development server and production build tool for the baseline.
 
 
 

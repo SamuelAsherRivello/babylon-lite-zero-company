@@ -5,8 +5,9 @@ Thank you for improving this project.
 ## Before changing code
 
 Review `README.md`, `AGENTS.md`, and the project's actual configuration first.
-Repository metadata belongs at the repository root; application files,
-dependencies, and project commands belong in the chosen project directory.
+For the baseline, the repository root holds the npm dependencies and project
+commands; application files live in `project-name/`. Keep repository metadata
+at the root.
 
 For a substantial feature or behavior change, use the configured OpenSpec
 workflow. Keep proposals, design decisions, tasks, implementation, and

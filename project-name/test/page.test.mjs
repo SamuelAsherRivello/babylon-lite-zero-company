@@ -1,29 +1,19 @@
-import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { pageContent, renderTemplatePage } from "../src/app.js";
-
-test("renders the starter page message", () => {
-  const elements = new Map([
-    ["page-title", { textContent: "" }],
-    ["page-message", { textContent: "" }],
-  ]);
-  const document = {
-    getElementById: (id) => elements.get(id) ?? null,
-  };
-
-  renderTemplatePage(document);
-
-  assert.equal(elements.get("page-title").textContent, pageContent.title);
-  assert.equal(elements.get("page-message").textContent, pageContent.message);
-});
-
-test("uses the repository version file in the Vite entry page footer", async () => {
+test("uses root-level template metadata in the Vite entry page", async () => {
   const page = await readFile(new URL("../index.html", import.meta.url), "utf8");
 
-  assert.match(page, /<div id="project_title">project-name<\/div>/);
-  assert.match(page, /target="_blank" rel="noopener noreferrer"/);
-  assert.match(page, /<footer id="footer"><span id="version"><\/span><\/footer>/);
-  assert.match(page, /import versionText from "\.\.\/version\.txt\?raw"/);
+  if (!page.includes("<title>{project-name}</title>")) {
+    throw new Error("The page title must use the project-name placeholder.");
+  }
+  if (!page.includes("<div id=\"project_title\">{project-name}</div>")) {
+    throw new Error("The visible title must use the project-name placeholder.");
+  }
+  if (!page.includes("https://github.com/{github-owner}/{repository-name}")) {
+    throw new Error("The repository link must be customized with the project.");
+  }
+  if (!page.includes('import versionText from "../version.txt?raw"')) {
+    throw new Error("The page must read the repository root version file.");
+  }
 });

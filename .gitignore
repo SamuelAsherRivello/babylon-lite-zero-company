@@ -1,5 +1,9 @@
 .setup/
 
+# Node and Vite output.
+node_modules/
+/project-name/dist/
+
 # Local configuration. Commit examples only, never credentials.
 .env
 .env.*

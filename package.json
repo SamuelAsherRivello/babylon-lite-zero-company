@@ -1,12 +1,12 @@
 {
-  "name": "html-project-starter",
+  "name": "project-name",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test test/page.test.mjs"
+    "test": "node --test project-name/test/page.test.mjs"
   },
   "devDependencies": {
     "vite": "^7.1.0"

@@ -1,8 +1,8 @@
 # AI Template Usage Checklist
 
 Use this checklist when creating a project from this repository. Make choices
-from the new project's actual needs; this template deliberately does not select
-a language, framework, package manager, test runner, or hosting provider.
+from the new project's actual needs. This repository includes a small
+Node/npm/Vite baseline that may be retained or replaced deliberately.
 
 ## 1. Confirm the request
 
@@ -15,15 +15,16 @@ a language, framework, package manager, test runner, or hosting provider.
 
 ## 2. Establish the project
 
-- [ ] Rename `project-name/` to the project name specified by the user, then
-      replace every `{project-name}` placeholder with the confirmed display
-      name and project-directory name before adding project-specific
+- [ ] Rename `project-name/`, update the Vite `root` setting, and replace every
+      `{project-name}`, `{github-owner}`, and `{repository-name}` placeholder
+      with confirmed project metadata before adding project-specific
       implementation.
 - [ ] Write a concise README introduction from implemented behavior.
 - [ ] Remove or replace placeholder images, demo links, commands, packages, and
       release instructions.
-- [ ] Keep application work inside the chosen project directory and repository
-      metadata at the root, as described in `AGENTS.md`.
+- [ ] Keep the baseline package files at the repository root and application
+      source, tests, and assets under the chosen application directory, as
+      described in `AGENTS.md`.
 
 ## 3. Choose the technical baseline
 
@@ -31,7 +32,9 @@ a language, framework, package manager, test runner, or hosting provider.
       project.
 - [ ] Record actual setup, run, test, build, and formatting commands in the
       README.
-- [ ] Update `.gitignore` for generated outputs, local state, and secrets.
+- [ ] Update `.gitignore` for generated outputs, local state, and secrets; keep
+      the baseline `node_modules/` and `project-name/dist/` exclusions if
+      Node/Vite remains.
 - [ ] Add a safe `.env.example` only if the project requires configuration; it
       must contain no real credentials.
 
@@ -60,9 +63,10 @@ a language, framework, package manager, test runner, or hosting provider.
 
 ## 7. Delivery gate
 
-- [ ] Search for `project-name`, `{command}`, `{live-demo-url}`, `{demo_url}`,
-      and other template placeholder text; resolve or deliberately remove every
-      remaining occurrence.
+- [ ] Search for `project-name`, `{github-owner}`, `{repository-name}`,
+      `{command}`, `{live-demo-url}`, `{demo_url}`, and other template
+      placeholder text; resolve or deliberately remove every remaining
+      occurrence.
 - [ ] Run every documented local setup, test, build, and formatting command.
       Run deployment or release verification only when authorized; otherwise
       state clearly whether it is intentionally not applicable or awaits user
