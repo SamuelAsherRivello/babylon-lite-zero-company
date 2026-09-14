@@ -6,16 +6,7 @@
 # {project-name}
 
 <!-- AI: Replace {project-name} with the requested project display name. Write one short introduction sentence explaining what the project does and who it is for, based on implemented behavior. -->
-Here is the project introduction sentence.
-
-## Using This Template with AI
-
-If user directs you to use this template, read
-[AI Repository Guidance](AGENTS.md), then complete the
-[AI Template Usage Checklist](AGENTS_TEMPLATE_USAGE_CHECKLIST.md) before
-choosing a stack or changing project files. Use GitHub's **Use this template**
-flow for an authorized new GitHub repository; treat requests for inspiration as
-reference-only unless the user asks to copy this template.
+Here is the project ...  
 
 ## Images
 
@@ -32,7 +23,7 @@ Here is the getting started ... &#x20;
 
 ## Table of Contents
 
-<!-- AI: Keep this list synchronized with the top-level sections below it and their Markdown anchors. Exclude the title, Using This Template with AI, Images, Demo, and Table of Contents because they appear above or here. Do not add subsection entries unless requested. -->
+<!-- AI: Keep this list synchronized with the top-level sections below it and their Markdown anchors. Exclude the title, Images, Demo, and Table of Contents because they appear above or here. Do not add subsection entries unless requested. -->
 1. [Getting Started](#getting-started)
 2. [Project Overview](#project-overview)
 3. [Project Details](#project-details)
