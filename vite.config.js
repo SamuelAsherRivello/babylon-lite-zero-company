@@ -5,7 +5,7 @@ import { defineConfig } from "vite";
 const repositoryRoot = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  root: "project-name",
+  root: "phaser4-platformer",
   server: {
     fs: {
       allow: [repositoryRoot],

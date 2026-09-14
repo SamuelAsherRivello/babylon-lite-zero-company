@@ -1,100 +1,51 @@
-<!-- AI: Customize this template from the target repository's actual files, configuration, and user instructions. Preserve the section order, heading styles, and concise format unless asked to change them. Replace placeholders only with verified information; leave unknown values as placeholders. Do not invent features, commands, URLs, contributors, or deployment behavior. Keep these instructions hidden as HTML comments. -->
-<!-- AI: Directory boundary: this repository root is the baseline npm project root. Run Git, configuration, dependency, build, test, and run commands here. The Vite entry page, source, assets, tests, and build output belong in {project-name}/. -->
-<!-- AI: Preserve the creator banner unless a replacement is requested. Update its relative path if assets move and verify the file exists with matching filename capitalization. -->
+<!-- AI: Keep commands rooted at the repository. The Vite application, source, tests, and build output belong in phaser4-platformer/. -->
 ![Samuel Asher Rivello](documentation/samuel-asher-rivello-banner.png)
 
-# {project-name}
+# Phaser 4 Platformer
 
-<!-- AI: Replace {project-name} with the requested project display name. Write one short introduction sentence explaining what the project does and who it is for, based on implemented behavior. -->
-Here is the project ...  
-
-## Images
-
-<!-- AI: Use screenshots that exist in this repository and represent the current project. Keep relative paths, matching link href and image src, and the 400-pixel preview width. Replace placeholder alt text with a brief description. Preserve image order unless instructed otherwise; do not invent asset paths. -->
-<a href="documentation/screenshot01.png"><img src="documentation/screenshot01.png" width="400" alt="Screenshot placeholder" /></a>
-
-
-## Live Demo
-
-<!-- Update “Here is” with a concise, verified live-demo introduction. -->
-Here is the getting started ... &#x20;
-
-- [{live-demo-url}]({live-demo-url})
+This small Phaser 4 browser demo keeps its surrounding interface in HTML while the game layer renders a movable square and its clickable controls.
 
 ## Table of Contents
 
-<!-- AI: Keep this list synchronized with the top-level sections below it and their Markdown anchors. Exclude the title, Images, Demo, and Table of Contents because they appear above or here. Do not add subsection entries unless requested. -->
 1. [Getting Started](#getting-started)
-2. [Project Overview](#project-overview)
+2. [Controls](#controls)
 3. [Project Details](#project-details)
-4. [Resources](#resources)
-5. [Credits](#credits)
+4. [Credits](#credits)
 
 ## Getting Started
 
 <!-- AI: Update these baseline Node/npm/Vite commands if the selected stack changes. -->
-The baseline requires Node.js 24 and npm.
+The project requires Node.js 24 and npm.
 
 ### 🛠 Build Project
 
-1. From the repository root, run `npm ci`.
+1. From the repository root, run `npm install`.
 2. Run `npm run build`.
 
 ### 🛠 Run Project
 
-1. From the repository root, run `npm run dev` and open the URL Vite prints.
+1. From the repository root, run `npm run dev` and open the localhost URL Vite prints.
+2. Run `npm test` to execute the focused source checks.
 
 ### 🛠 Release Version
 
-<!-- AI: Update this baseline process if the selected deployment target changes. -->
 1. Run `npm test` and `npm run build` from the repository root.
-2. Push to `main` to trigger the checked-in GitHub Pages workflow.
+2. Push to `main` to deploy through the GitHub Pages workflow.
+3. Run the **Release** workflow from GitHub Actions to bump the patch version, tag it, and create the GitHub release.
 
-## Project Overview
+## Controls
 
-<!-- AI: Summarize the project's purpose, main capabilities, and intended use cases. Describe current implementation; label planned capabilities explicitly rather than presenting them as complete. Keep detailed tooling under Project Details. -->
-Here is the project overview...
-
-### 📝 Documentation
-
-<!-- AI: Link to the main documentation files that actually exist using relative Markdown links and a short purpose for each. Update links when files move; do not reference documentation inherited from another project unless present here. -->
-- `README.md`: Primary documentation for this repo.
-- [Contributing](CONTRIBUTING.md): Contribution and verification guidance.
-- [Security Policy](SECURITY.md): Private vulnerability-reporting guidance.
-
-### 📝 Structure
-
-<!-- AI: List only the few folders needed to understand the project. Check paths and capitalization. Omit generated output, dependency folders, and exhaustive file inventories. -->
-- `{project-name}/src/`: Application source when the selected stack uses source files.
-- `{project-name}/test/`: Focused automated checks for the starter.
-- `documentation/`: Canonical README images and project documentation.
-
-
-
+- Move the blue square with WASD or the arrow keys.
+- Use the canvas controller along the bottom edge for movement on touch devices.
+- Trigger Action 1 with C or its clickable `Action 1 (c)` game-layer button.
+- Trigger Action 2 with V or its clickable `Action 2 (v)` game-layer button.
 
 ## Project Details
 
-<!-- AI: Replace this placeholder with a short description of implementation details useful to developers. Verify the stack from repository files and avoid repeating the overview or claiming unverified package versions. -->
-Here is the project details ...
-
-### 📦 AI
-
-<!-- AI: List AI tools and specification workflows configured or documented for this repository. Use official links and concise descriptions; verify current official wording before using a tagline. Treat inherited entries as examples to validate, not proof of installed tooling. -->
-- [Codex](https://openai.com/codex/): The best way to build with agents.
-- [OpenSpec](https://openspec.dev/): Specification-driven development
-
-
-### 📦 Packages
-
-<!-- AI: List the key packages actually used, based on manifests and configuration. Link each name to its official site or documentation and describe its role briefly. Replace template examples that do not apply. Include versions only when useful and verified against the repository. -->
-- [Vite](https://vite.dev/): Development server and production build tool for the baseline.
-
-
-
-## Resources
-
-<!-- AI: Keep relevant external learning and best-practice links with readable labels and short descriptions. Preserve the existing Best Practices resource unless asked to replace it. Verify new destinations and avoid duplicating local documentation links. -->
-- [Best Practices](https://www.SamuelAsherRivello.com/best-practices/) - Procedures prescribed as the most effective
+- `phaser4-platformer/src/main.js` contains the Phaser scene, square movement, action feedback, and game-layer controls.
+- `phaser4-platformer/index.html` provides the separate HTML UI layer and starts the Phaser module.
+- [Phaser 4](https://phaser.io/download/phaser4) supplies the browser game engine.
+- [Vite](https://vite.dev/) provides local development and production builds.
 
 
 ## Credits

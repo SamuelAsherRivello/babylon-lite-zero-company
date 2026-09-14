@@ -1,12 +1,15 @@
 {
-  "name": "project-name",
+  "name": "phaser-4-platformer-demo",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test project-name/test/page.test.mjs"
+    "test": "node --test phaser4-platformer/test/page.test.mjs"
+  },
+  "dependencies": {
+    "phaser": "^4.2.1"
   },
   "devDependencies": {
     "vite": "^7.1.0"
