@@ -7,6 +7,3 @@ node_modules/
 # Local configuration. Commit examples only, never credentials.
 .env
 .env.*
-
-# Compatibility directory created by .openspec/setup.ps1.
-/openspec

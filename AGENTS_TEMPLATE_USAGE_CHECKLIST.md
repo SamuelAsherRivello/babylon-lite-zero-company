@@ -49,7 +49,7 @@ Node/npm/Vite baseline that may be retained or replaced deliberately.
 
 ## 5. Configure OpenSpec
 
-- [ ] Replace the neutral `.openspec/config.yaml` context with verified project
+- [ ] Replace the neutral `openspec/config.yaml` context with verified project
       constraints before planning the first substantial change.
 - [ ] Keep `changes/` for active work and `specs/` for accepted specifications.
 - [ ] Sync accepted delta specifications before archiving a completed change.
