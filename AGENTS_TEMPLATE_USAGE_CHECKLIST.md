@@ -19,6 +19,7 @@ Node/npm/Vite baseline that may be retained or replaced deliberately.
       `{project-name}`, `{github-owner}`, and `{repository-name}` placeholder
       with confirmed project metadata before adding project-specific
       implementation.
+- [ ] Rename the README H1 (`# {project-name}`) to the confirmed project name.
 - [ ] Replace the README introduction placeholder (`This is the project
       repo....`) with a concise summary from implemented behavior.
 - [ ] Replace the README getting-started placeholder (`This is the getting

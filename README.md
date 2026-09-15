@@ -1,7 +1,7 @@
 <!-- AI: Keep commands rooted at the repository. The Vite application, source, tests, and build output belong in project-name/. -->
 ![Samuel Asher Rivello](project-name/documentation/samuel-asher-rivello-banner.png)
 
-# GitHub Repository Template
+# {project-name}
 
 <!-- AI: Update this project summary when the template is used. -->
 This is the project repo....
@@ -12,12 +12,17 @@ This is the project repo....
 
 <a href="project-name/documentation/screenshot01.png"><img src="project-name/documentation/screenshot01.png" width="400" alt="Screenshot placeholder" /></a>
 
+## Live Demo
+
+- [{live-demo-url}](https://samuelasherivello.github.io/github-repository-template/)
+
 ## Table of Contents
 
 1. [Images](#images)
-2. [Getting Started](#getting-started)
-3. [Project Details](#project-details)
-4. [Credits](#credits)
+2. [Live Demo](#live-demo)
+3. [Getting Started](#getting-started)
+4. [Project Details](#project-details)
+5. [Credits](#credits)
 
 ## Getting Started
 
@@ -40,10 +45,6 @@ This is the getting started...
 2. Push to `main` to deploy through the GitHub Pages workflow.
 3. Run the **Release** workflow from GitHub Actions to bump the patch version, tag it, and create the GitHub release.
 
-## Live Demo
-
-- [{live-demo-url}](https://samuelasherivello.github.io/github-repository-template/)
-
 ## Project Details
 
 <!-- AI: Update these project details when the template is used. -->
@@ -51,6 +52,7 @@ This is the project details...
 
 - `project-name/index.html` provides the plain safe-area HTML shell.
 - [Vite](https://vite.dev/) provides local development and production builds.
+- [OpenCode](.opencode/) contains repository-specific AI agent guidance.
 - [openspec](openspec/) contains the repository's specification workflow configuration.
 
 
