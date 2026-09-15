@@ -22,6 +22,13 @@ If user directs you to use this template, then follow these steps:
    running setup, test, build, deployment, or release commands. Complete the
    checklist's delivery gate before presenting the project as ready.
 
+## Pull request workflow
+
+- Do not create pull requests for any workflow unless the user explicitly asks
+  for a pull request in the current request.
+- Pushing a branch, committing changes, or completing an OpenSpec/template
+  workflow is not implicit approval to open a pull request.
+
 ## Working directories
 
 - **Repository root** is the npm project root. It contains `.git`, repository
