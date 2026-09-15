@@ -25,7 +25,8 @@ If user directs you to use this template, then follow these steps:
 ## Working directories
 
 - **Repository root** is the npm project root. It contains `.git`, repository
-  metadata, package configuration, and project documentation. Run Git,
+  metadata, and package configuration. Project documentation assets live in
+  `project-name/documentation/`. Run Git,
   dependency, build, test, and run commands there.
 - **Application root** is `phaser4-platformer/`. It contains the Vite entry page,
   source, tests, assets, and build output. Keep application implementation
