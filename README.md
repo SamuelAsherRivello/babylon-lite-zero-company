@@ -50,10 +50,24 @@ This is the getting started...
 <!-- AI: Update these project details when the template is used. -->
 This is the project details...
 
+### 📝 Structure
+
 - `project-name/index.html` provides the plain safe-area HTML shell.
+- `project-name/test/` contains focused automated checks for the starter.
+- `project-name/documentation/` contains canonical README images and project
+  documentation assets.
+
+### 📦 AI
+
+- `AGENTS.md` contains repository-specific AI agent guidance.
+- `AGENTS_TEMPLATE_USAGE_CHECKLIST.md` contains the template reuse checklist.
+- [OpenCode](.opencode/) contains additional agent guidance.
+- [openspec](openspec/) contains the repository's specification workflow
+  configuration.
+
+### 📦 Packages
+
 - [Vite](https://vite.dev/) provides local development and production builds.
-- [OpenCode](.opencode/) contains repository-specific AI agent guidance.
-- [openspec](openspec/) contains the repository's specification workflow configuration.
 
 
 ## Credits

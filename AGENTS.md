@@ -22,6 +22,16 @@ If user directs you to use this template, then follow these steps:
    running setup, test, build, deployment, or release commands. Complete the
    checklist's delivery gate before presenting the project as ready.
 
+## HTML template corner roles
+
+The default HTML template uses four reusable `corner` instances inside
+`ui_layer`. Preserve these roles when adapting the template:
+
+- Upper left: project title.
+- Upper right: project links.
+- Lower right: project version.
+- Lower left: project settings.
+
 ## Pull request workflow
 
 - Do not create pull requests for any workflow unless the user explicitly asks

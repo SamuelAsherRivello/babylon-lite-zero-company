@@ -32,6 +32,9 @@ Node/npm/Vite baseline that may be retained or replaced deliberately.
 - [ ] Keep the baseline package files at the repository root and application
       source, tests, and assets under the chosen application directory, as
       described in `AGENTS.md`.
+- [ ] Preserve or deliberately adapt the HTML template corner roles from
+      `AGENTS.md`: upper-left project title, upper-right project links,
+      lower-right project version, and lower-left project settings.
 
 ## 3. Choose the technical baseline
 
@@ -64,6 +67,8 @@ Node/npm/Vite baseline that may be retained or replaced deliberately.
 ## 6. Prepare delivery
 
 - [ ] Add CI and deployment only after their commands and target are known.
+- [ ] Confirm the release versioning policy before keeping or documenting the
+      baseline patch-only release workflow.
 - [ ] Document the real release process, including versioning and deployment
       verification, in the README.
 - [ ] Confirm that the README demo URL is live before replacing its placeholder.
@@ -71,9 +76,10 @@ Node/npm/Vite baseline that may be retained or replaced deliberately.
 ## 7. Delivery gate
 
 - [ ] Search for `project-name`, `{github-owner}`, `{repository-name}`,
-      `{command}`, `{live-demo-url}`, `{demo_url}`, and other template
-      placeholder text; resolve or deliberately remove every remaining
-      occurrence.
+      `{command}`, `{live-demo-url}`, `{demo_url}`,
+      `github-repository-template`, `GitHub Repository Template`, and other
+      template placeholder text; resolve or deliberately remove every
+      remaining occurrence.
 - [ ] Run every documented local setup, test, build, and formatting command.
       Run deployment or release verification only when authorized; otherwise
       state clearly whether it is intentionally not applicable or awaits user
