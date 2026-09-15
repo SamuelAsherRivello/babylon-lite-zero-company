@@ -14,7 +14,7 @@ This is the project repo....
 
 ## Live Demo
 
-- [{live-demo-url}](https://samuelasherivello.github.io/github-repository-template/)
+- [{live-demo-url}](https://samuelasherrivello.github.io/github-repository-template/)
 
 ## Table of Contents
 
