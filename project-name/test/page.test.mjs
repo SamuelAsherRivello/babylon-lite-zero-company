@@ -1,7 +1,14 @@
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import viteConfig from "../../vite.config.js";
 
 const appRoot = new URL("../", import.meta.url);
+
+test("builds for the GitHub Pages project path", () => {
+  if (viteConfig.base !== "/github-repository-template/") {
+    throw new Error("The GitHub Pages build must use the repository project path as its Vite base.");
+  }
+});
 
 test("documents the plain safe-area template", async () => {
   const page = await readFile(new URL("index.html", appRoot), "utf8");
