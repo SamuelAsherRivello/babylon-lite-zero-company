@@ -1,5 +1,5 @@
 {
-  "name": "phaser-4-platformer-demo",
+  "name": "browser-platformer-demo",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,9 +8,7 @@
     "preview": "vite preview",
     "test": "node --test project-name/test/page.test.mjs"
   },
-  "dependencies": {
-    "phaser": "^4.2.1"
-  },
+  "dependencies": {},
   "devDependencies": {
     "vite": "^7.1.0"
   }
