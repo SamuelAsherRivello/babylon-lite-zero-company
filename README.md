@@ -32,12 +32,15 @@ The project requires Node.js 24 and npm.
 2. Push to `main` to deploy through the GitHub Pages workflow.
 3. Run the **Release** workflow from GitHub Actions to bump the patch version, tag it, and create the GitHub release.
 
+## Live Demo
+
+- [{live-demo-url}](https://samuelasherivello.github.io/github-repository-template/)
+
 ## Project Details
 
-- `project-name/src/main.js` contains the browser entry point for the starter page.
-- `project-name/index.html` provides the HTML shell and starts the application module.
+- `project-name/index.html` provides the plain safe-area HTML shell.
 - [Vite](https://vite.dev/) provides local development and production builds.
-- [openspec](https://github.com/SamuelAsherRivello/github-repository-template/tree/main/.openspec) contains the repository's specification workflow configuration.
+- [openspec](openspec/) contains the repository's specification workflow configuration.
 
 
 ## Credits

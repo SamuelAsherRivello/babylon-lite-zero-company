@@ -23,7 +23,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Test Phaser platformer
+      - name: Test template
         run: npm test
       - name: Bump patch version
         id: version
