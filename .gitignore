@@ -2,7 +2,7 @@
 
 # Node and Vite output.
 node_modules/
-/phaser4-platformer/dist/
+/project-name/dist/
 
 # Local configuration. Commit examples only, never credentials.
 .env

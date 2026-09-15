@@ -1,4 +1,4 @@
-<!-- AI: Keep commands rooted at the repository. The Vite application, source, tests, and build output belong in phaser4-platformer/. -->
+<!-- AI: Keep commands rooted at the repository. The Vite application, source, tests, and build output belong in project-name/. -->
 ![Samuel Asher Rivello](project-name/documentation/samuel-asher-rivello-banner.png)
 
 # Phaser 4 Platformer
@@ -42,8 +42,8 @@ The project requires Node.js 24 and npm.
 
 ## Project Details
 
-- `phaser4-platformer/src/main.js` contains the Phaser scene, square movement, action feedback, and game-layer controls.
-- `phaser4-platformer/index.html` provides the separate HTML UI layer and starts the Phaser module.
+- `project-name/src/main.js` contains the Phaser scene, square movement, action feedback, and game-layer controls.
+- `project-name/index.html` provides the separate HTML UI layer and starts the Phaser module.
 - [Phaser 4](https://phaser.io/download/phaser4) supplies the browser game engine.
 - [Vite](https://vite.dev/) provides local development and production builds.
 - [openspec](https://github.com/SamuelAsherRivello/github-repository-template/tree/main/.openspec) contains the repository's specification workflow configuration.
