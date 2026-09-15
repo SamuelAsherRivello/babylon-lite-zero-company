@@ -3,18 +3,26 @@
 
 # GitHub Repository Template
 
-This repository is a reusable Vite template with a small browser entry point, focused source checks, project documentation space, and release workflow guidance.
+<!-- AI: Update this project summary when the template is used. -->
+This is the project repo....
+
+## Images
+
+### Screenshots
+
+<a href="project-name/documentation/screenshot01.png"><img src="project-name/documentation/screenshot01.png" width="400" alt="Screenshot placeholder" /></a>
 
 ## Table of Contents
 
-1. [Getting Started](#getting-started)
-2. [Project Details](#project-details)
-3. [Credits](#credits)
+1. [Images](#images)
+2. [Getting Started](#getting-started)
+3. [Project Details](#project-details)
+4. [Credits](#credits)
 
 ## Getting Started
 
-<!-- AI: Update these baseline Node/npm/Vite commands if the selected stack changes. -->
-The project requires Node.js 24 and npm.
+<!-- AI: Update this getting-started summary when the template is used. -->
+This is the getting started...
 
 ### 🛠 Build Project
 
@@ -37,6 +45,9 @@ The project requires Node.js 24 and npm.
 - [{live-demo-url}](https://samuelasherivello.github.io/github-repository-template/)
 
 ## Project Details
+
+<!-- AI: Update these project details when the template is used. -->
+This is the project details...
 
 - `project-name/index.html` provides the plain safe-area HTML shell.
 - [Vite](https://vite.dev/) provides local development and production builds.

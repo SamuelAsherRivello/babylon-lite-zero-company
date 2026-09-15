@@ -19,7 +19,13 @@ Node/npm/Vite baseline that may be retained or replaced deliberately.
       `{project-name}`, `{github-owner}`, and `{repository-name}` placeholder
       with confirmed project metadata before adding project-specific
       implementation.
-- [ ] Write a concise README introduction from implemented behavior.
+- [ ] Replace the README introduction placeholder (`This is the project
+      repo....`) with a concise summary from implemented behavior.
+- [ ] Replace the README getting-started placeholder (`This is the getting
+      started...`) with accurate setup requirements and first-run guidance.
+- [ ] Replace the README project-details placeholder (`This is the project
+      details...`) with verified project-specific architecture, source layout,
+      and workflow details.
 - [ ] Remove or replace placeholder images, demo links, commands, packages, and
       release instructions.
 - [ ] Keep the baseline package files at the repository root and application
