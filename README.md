@@ -1,16 +1,15 @@
 <!-- AI: Keep commands rooted at the repository. The Vite application, source, tests, and build output belong in project-name/. -->
 ![Samuel Asher Rivello](project-name/documentation/samuel-asher-rivello-banner.png)
 
-# Browser Platformer
+# GitHub Repository Template
 
-This small browser demo keeps its surrounding interface in HTML while the game layer renders a movable square and its clickable controls.
+This repository is a reusable Vite template with a small browser entry point, focused source checks, project documentation space, and release workflow guidance.
 
 ## Table of Contents
 
 1. [Getting Started](#getting-started)
-2. [Controls](#controls)
-3. [Project Details](#project-details)
-4. [Credits](#credits)
+2. [Project Details](#project-details)
+3. [Credits](#credits)
 
 ## Getting Started
 
@@ -33,17 +32,10 @@ The project requires Node.js 24 and npm.
 2. Push to `main` to deploy through the GitHub Pages workflow.
 3. Run the **Release** workflow from GitHub Actions to bump the patch version, tag it, and create the GitHub release.
 
-## Controls
-
-- Move the blue square with WASD or the arrow keys.
-- Use the canvas controller along the bottom edge for movement on touch devices.
-- Trigger Action 1 with C or its clickable `Action 1 (c)` game-layer button.
-- Trigger Action 2 with V or its clickable `Action 2 (v)` game-layer button.
-
 ## Project Details
 
-- `project-name/src/main.js` contains the canvas scene, square movement, action feedback, and game-layer controls.
-- `project-name/index.html` provides the separate HTML UI layer and starts the game module.
+- `project-name/src/main.js` contains the browser entry point for the starter page.
+- `project-name/index.html` provides the HTML shell and starts the application module.
 - [Vite](https://vite.dev/) provides local development and production builds.
 - [openspec](https://github.com/SamuelAsherRivello/github-repository-template/tree/main/.openspec) contains the repository's specification workflow configuration.
 
