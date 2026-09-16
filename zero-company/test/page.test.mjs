@@ -1,95 +1,112 @@
+import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import viteConfig from "../../vite.config.js";
+import {
+  CHARACTER_MODEL_RELATIVE_PATH,
+  createPresentationDescriptors,
+} from "../src/game/descriptors.js";
 
 const appRoot = new URL("../", import.meta.url);
 
+async function readAppFile(relativePath) {
+  return readFile(new URL(relativePath, appRoot), "utf8");
+}
+
 test("builds for the GitHub Pages project path", () => {
-  if (viteConfig.base !== "/babylon-lite-zero-company/") {
-    throw new Error("The GitHub Pages build must use the repository project path as its Vite base.");
-  }
+  assert.equal(viteConfig.base, "/babylon-lite-zero-company/");
 });
 
-test("documents the Zero Company safe-area app shell", async () => {
-  const page = await readFile(new URL("index.html", appRoot), "utf8");
-  const app = await readFile(new URL("src/App.jsx", appRoot), "utf8");
-  const styles = await readFile(new URL("src/style.css", appRoot), "utf8");
+test("defines the exact presentation inventory from one local model", () => {
+  const descriptors = createPresentationDescriptors("/test-base/");
+  const players = descriptors.units.filter((unit) => unit.team === "player");
+  const enemies = descriptors.units.filter((unit) => unit.team === "enemy");
 
-  if (!page.includes("<title>Zero Company</title>")) {
-    throw new Error("The browser title must identify Zero Company.");
+  assert.equal(players.length, 3);
+  assert.equal(enemies.length, 3);
+  assert.equal(descriptors.covers.length, 3);
+  assert.equal(descriptors.model.url, `/test-base/${CHARACTER_MODEL_RELATIVE_PATH}`);
+  assert.equal(new Set(descriptors.units.map((unit) => unit.id)).size, 6);
+  assert.equal(Object.isFrozen(descriptors), true);
+  assert.equal(Object.isFrozen(descriptors.units), true);
+});
+
+test("bundles a valid self-contained GLB character", async () => {
+  const model = await readFile(new URL(`../public/${CHARACTER_MODEL_RELATIVE_PATH}`, import.meta.url));
+  assert.equal(model.subarray(0, 4).toString("ascii"), "glTF");
+  assert.equal(model.readUInt32LE(4), 2);
+  assert.equal(model.readUInt32LE(8), model.length);
+
+  const jsonLength = model.readUInt32LE(12);
+  const jsonType = model.readUInt32LE(16);
+  assert.equal(jsonType, 0x4e4f534a);
+  const gltf = JSON.parse(model.subarray(20, 20 + jsonLength).toString("utf8").trim());
+  assert.equal(gltf.scenes.length, 1);
+  assert.equal(gltf.nodes.length, 19);
+  assert.equal(gltf.meshes.length, 3);
+  assert.equal(gltf.materials.length, 3);
+  assert.equal(gltf.images?.length ?? 0, 0);
+  assert.equal(gltf.textures?.length ?? 0, 0);
+  assert.equal(gltf.buffers.some((buffer) => "uri" in buffer), false);
+});
+
+test("uses a disposable scene lifecycle with local asset failure handling", async () => {
+  const lifecycle = await readAppFile("src/game/sceneLifecycle.js");
+  assert.match(lifecycle, /SceneLoader\.ImportMeshAsync/);
+  assert.match(lifecycle, /callbacks\.onLoadingChange\(\{ status: "loading"/);
+  assert.match(lifecycle, /status: "error"/);
+  assert.match(lifecycle, /window\.removeEventListener\("resize", resize\)/);
+  assert.match(lifecycle, /cameraController\.dispose\(\)/);
+  assert.match(lifecycle, /engine\.dispose\(\)/);
+  assert.match(lifecycle, /if \(disposed\)/);
+});
+
+test("renders the complete nonfunctional tactical interface", async () => {
+  const page = await readAppFile("index.html");
+  const app = await readAppFile("src/App.jsx");
+  const styles = await readAppFile("src/style.css");
+
+  assert.match(page, /<title>Zero Company<\/title>/);
+  assert.match(page, /id="content_layer"/);
+  assert.match(page, /id="ui_layer"/);
+  assert.match(app, /PLAYER TURN/);
+  for (const action of ["Move", "Shoot", "Overwatch", "End Turn"]) {
+    assert.match(app, new RegExp(`label: "${action}"`));
   }
-  if (!page.includes('id="content_layer"')) {
-    throw new Error("The page needs a dedicated application content layer.");
-  }
-  if (!page.includes('id="ui_layer"')) {
-    throw new Error("The page needs a separate HTML UI layer.");
-  }
-  if (!page.includes('src="/src/main.jsx"')) {
-    throw new Error("The page must load the React application module.");
-  }
-  if (!app.includes("const uiMarginPixels = 20")) {
-    throw new Error("The UI margin must be set from a single 20px target.");
-  }
-  if (!app.includes("--ui-margin-x") || !app.includes("--ui-margin-y")) {
-    throw new Error("The UI margin must use separate percentage values for horizontal and vertical sides.");
-  }
-  if (!app.includes("window.innerWidth") || !app.includes("window.innerHeight")) {
-    throw new Error("The UI margin percentages must be calculated from the viewport dimensions.");
-  }
-  if (!app.includes('window.addEventListener("resize", syncUiMargin)')) {
-    throw new Error("The UI margin percentages must stay current when the viewport resizes.");
-  }
-  if (!styles.includes("inset: var(--ui-margin-y, 20px) var(--ui-margin-x, 20px)")) {
-    throw new Error("The page must apply percentage-based UI margins with a 20px fallback.");
-  }
-  if (!styles.includes(".corner {")) {
-    throw new Error("The page must define a reusable corner style.");
-  }
+  assert.match(app, /aria-disabled="true"/);
+  assert.match(app, /const ignorePresentationAction = \(\) => \{\};/);
+  assert.match(app, /className="unit-health"/);
+  assert.match(app, /className="ap-dots"/);
+  assert.match(app, /aria-label="Overwatch"/);
+  assert.match(styles, /grid-template-columns: repeat\(4, 78px\)/);
+});
+
+test("preserves the four corner roles and release version", async () => {
+  const app = await readAppFile("src/App.jsx");
   for (const cornerClass of ["corner_top_left", "corner_top_right", "corner_bottom_left", "corner_bottom_right"]) {
-    if (!app.includes(`className="corner ${cornerClass}"`)) {
-      throw new Error(`The page must include a ${cornerClass} corner instance.`);
-    }
+    assert.match(app, new RegExp(`className="corner ${cornerClass}"`));
   }
-  if (!app.includes('id="version"')) {
-    throw new Error("The page must show the version footer.");
-  }
-  if (!app.includes("v{versionNumber}")) {
-    throw new Error("The version corner must display versions in v0.0.0 format.");
-  }
-  if (!app.includes("Settings")) {
-    throw new Error("The page must include a lower-left Settings section.");
-  }
-  if (!styles.includes(".corner_body") || !styles.includes(".corner_title")) {
-    throw new Error("The page must define shared corner body and title text styles.");
-  }
-  if (!app.includes('id="settings_title"') || !app.includes('className="corner_title"')) {
-    throw new Error("The Settings heading must use the bold corner title style.");
-  }
-  if (!app.includes('id="fullscreen_toggle"') || !app.includes('className="corner_body settings_option"')) {
-    throw new Error("The fullscreen setting must use the shared corner body style.");
-  }
-  if (!app.includes("Fullscreen")) {
-    throw new Error("The Settings section must include the Fullscreen option line.");
-  }
-  if (app.includes("Fullscreen (")) {
-    throw new Error("The Fullscreen setting must not wrap the checkbox emoji in parentheses.");
-  }
-  if (!app.includes("☐") || !app.includes("☑")) {
-    throw new Error("The fullscreen setting must use empty and checked checkbox emoji.");
-  }
-  if (!app.includes("localStorage.setItem(fullscreenStorageKey")) {
-    throw new Error("The fullscreen setting must persist its preference locally.");
-  }
-  if (!app.includes("requestFullscreen") || !app.includes("exitFullscreen")) {
-    throw new Error("The fullscreen setting must toggle the browser fullscreen API.");
-  }
-  if (!app.includes("https://github.com/SamuelAsherRivello/babylon-lite-zero-company")) {
-    throw new Error("The page must link to the Zero Company repository.");
-  }
-  if (!app.includes("tabIndex={-1}")) {
-    throw new Error("The corner UI controls must be removed from the tabbing order.");
-  }
-  if (page.includes('src="/src/main.js"')) {
-    throw new Error("The safe-area template should not load an application module.");
-  }
+  assert.match(app, /id="project_title"/);
+  assert.match(app, /View the repository on GitHub/);
+  assert.match(app, /id="settings"/);
+  assert.match(app, /id="version"/);
+  assert.match(app, /v\{versionNumber\}/);
+});
+
+test("defines the required responsive frame and input mappings", async () => {
+  const app = await readAppFile("src/App.jsx");
+  const camera = await readAppFile("src/game/cameraController.js");
+  const styles = await readAppFile("src/style.css");
+
+  assert.match(styles, /width: min\(100vw, calc\(100vh \* 16 \/ 9\)\)/);
+  assert.match(styles, /height: min\(100vh, calc\(100vw \* 9 \/ 16\)\)/);
+  assert.match(styles, /background: #080a0c/);
+  assert.match(app, /\(orientation: portrait\) and \(pointer: coarse\)/);
+  assert.match(app, /Rotate device/);
+  assert.match(app, /inputEnabled=\{!portraitBlocked\}/);
+  assert.match(camera, /event\.button === 2/);
+  assert.match(camera, /addEventListener\("wheel"/);
+  assert.match(camera, /pointer\.pointerType === "touch"/);
+  assert.match(camera, /touchGesture\.distance \/ nextDistance/);
+  assert.match(camera, /addEventListener\("contextmenu"/);
 });

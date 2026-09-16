@@ -8,10 +8,14 @@
     "preview": "vite preview",
     "pw": "playwright-cli",
     "pw:help": "playwright-cli --help",
-    "test": "node --test --test-isolation=none zero-company/test/page.test.mjs"
+    "test": "node --test --test-isolation=none zero-company/test/page.test.mjs",
+    "test:browser": "node zero-company/test/browser-smoke.mjs"
   },
   "dependencies": {
+    "@babylonjs/core": "^9.26.2",
+    "@babylonjs/loaders": "^9.26.2",
     "@vitejs/plugin-react": "^6.1.1",
+    "lucide-react": "^1.46.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

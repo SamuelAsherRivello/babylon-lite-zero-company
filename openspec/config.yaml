@@ -1,12 +1,24 @@
 schema: spec-driven
 context: |
-  Repository: project-name.
-  This repository starts as a reusable template with no application
-  implementation, product decisions, or approved technology stack.
-  Canonical project documentation assets live in project-name/documentation/.
-  Before proposing or applying a change, record the project's verified purpose,
-  runtime targets, architecture, dependency policy, security constraints, and
-  validation commands here.
+  Repository: Zero Company.
+  Purpose: a compact browser-based 3D turn-based tactical game inspired by
+  STAR WARS Zero Company mechanics and an intentionally simple greybox visual
+  style, using original or permissively licensed assets only.
+  Application source and tests live in zero-company/ while the repository root
+  owns Vite, npm scripts, dependencies, and deployment configuration.
+  Target runtime: current desktop browsers with mouse input and mobile browsers
+  in physical landscape orientation with touch input. The game surface is 16:9
+  with a dark background and letterboxing or pillarboxing as needed.
+  Architecture: React owns HTML interface content in ui_layer; Babylon.js owns
+  the 3D canvas and scene in content_layer; deterministic gameplay rules remain
+  separable from rendering and input adapters.
+  Deployment target: the existing GitHub Pages project site.
+  Dependency policy: add only packages and locally bundled assets needed for
+  the approved MVP. Runtime gameplay must not require network access.
+  Validation: run npm test and npm run build from the repository root, then
+  verify each milestone in desktop and mobile-sized real browser sessions.
+  Security: do not include secrets, remote credentials, telemetry, or runtime
+  calls to third-party services.
 rules:
   proposal:
     - Mark unresolved decisions clearly; recommendations are not approvals.
