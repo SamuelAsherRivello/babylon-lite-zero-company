@@ -6,9 +6,9 @@ import { defineConfig } from "vite";
 const repositoryRoot = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  base: "/github-repository-template/",
+  base: "/babylon-lite-zero-company/",
   plugins: [react()],
-  root: "project-name",
+  root: "zero-company",
   server: {
     fs: {
       allow: [repositoryRoot],

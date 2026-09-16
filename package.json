@@ -1,5 +1,5 @@
 {
-  "name": "github-repository-template",
+  "name": "babylon-lite-zero-company",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "preview": "vite preview",
     "pw": "playwright-cli",
     "pw:help": "playwright-cli --help",
-    "test": "node --test --test-isolation=none project-name/test/page.test.mjs"
+    "test": "node --test --test-isolation=none zero-company/test/page.test.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^6.1.1",

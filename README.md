@@ -1,20 +1,21 @@
-<!-- AI: Keep commands rooted at the repository. The Vite application, source, tests, and build output belong in project-name/. -->
-![Samuel Asher Rivello](project-name/documentation/samuel-asher-rivello-banner.png)
+<!-- AI: Keep commands rooted at the repository. The Vite application, source, tests, and build output belong in zero-company/. -->
+![Samuel Asher Rivello](zero-company/documentation/samuel-asher-rivello-banner.png)
 
-# {project-name}
+# Zero Company
 
-<!-- AI: Update this project summary when the template is used. -->
-This is the project repo....
+Zero Company is a Babylon-ready Vite/React project shell for the `babylon-lite-zero-company` repository. It preserves the template's safe-area browser layout with a project title, repository link, fullscreen setting, and visible release version.
+
+Current version: `v0.0.3`
 
 ## Images
 
 ### Screenshots
 
-<a href="project-name/documentation/screenshot01.png"><img src="project-name/documentation/screenshot01.png" width="400" alt="Screenshot placeholder" /></a>
+<a href="zero-company/documentation/screenshot01.png"><img src="zero-company/documentation/screenshot01.png" width="400" alt="Zero Company screenshot" /></a>
 
 ## Live Demo
 
-- [{live-demo-url}](https://samuelasherrivello.github.io/github-repository-template/)
+- [samuelasherrivello.github.io/babylon-lite-zero-company](https://samuelasherrivello.github.io/babylon-lite-zero-company/)
 
 ## Table of Contents
 
@@ -26,8 +27,7 @@ This is the project repo....
 
 ## Getting Started
 
-<!-- AI: Update this getting-started summary when the template is used. -->
-This is the getting started...
+Use the repository root for dependency, test, build, and release commands. The Vite application lives in `zero-company/`.
 
 ### 🛠 Build Project
 
@@ -47,14 +47,13 @@ This is the getting started...
 
 ## Project Details
 
-<!-- AI: Update these project details when the template is used. -->
-This is the project details...
+Zero Company currently uses a minimal Vite, React, and plain CSS baseline. The root package owns npm scripts and dependency lockfiles, while application source, tests, build output, and documentation assets stay under `zero-company/`.
 
 ### 📝 Structure
 
-- `project-name/index.html` provides the plain safe-area HTML shell.
-- `project-name/test/` contains focused automated checks for the starter.
-- `project-name/documentation/` contains canonical README images and project
+- `zero-company/index.html` provides the plain safe-area HTML shell.
+- `zero-company/test/` contains focused automated checks for the app shell.
+- `zero-company/documentation/` contains canonical README images and project
   documentation assets.
 
 ### 📦 AI
