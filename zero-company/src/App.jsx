@@ -16,6 +16,7 @@ import {
 import versionText from "../../version.txt?raw";
 import { createZeroCompanyScene } from "./game/index.js";
 import { createAudioController } from "./game/audioController.js";
+import { getInstructionText } from "./instructions.js";
 import {
   chooseEnemyPlan,
   createEnemyIntentViewModel,
@@ -793,6 +794,12 @@ export function App() {
   }, []);
 
   const selectedUnit = getUnitInspection(battle, selectedUnitId);
+  const instructionText = getInstructionText({
+    battle,
+    selectedUnit,
+    presentationBusy,
+    loadState,
+  });
   const selectedActions = new Set(
     presentationBusy ? [] : selectedUnit?.availableActions ?? [],
   );
@@ -1362,11 +1369,17 @@ export function App() {
               <span>Mute</span>
               {muted ? <CheckSquare2 size={14} /> : <Square size={14} />}
             </button>
+            <span id="version" className="corner_body">v{versionNumber}</span>
           </section>
         </div>
 
         <div className="corner corner_bottom_right">
-          <span id="version" className="corner_body">v{versionNumber}</span>
+          <section id="instructions" aria-labelledby="instructions_title">
+            <div id="instructions_title" className="corner_title">Instructions</div>
+            <div id="instruction_text" className="corner_body" role="status">
+              {instructionText}
+            </div>
+          </section>
         </div>
 
         {loadState.status === "loading" ? (
