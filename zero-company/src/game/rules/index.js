@@ -9,9 +9,16 @@ export {
 } from "./contracts.js";
 export { dispatchBattleCommand } from "./commands.js";
 export { applyTerminalResult, getBattleResult } from "./battleResult.js";
-export { getCellDistance, queryAttack, resolveAttack } from "./combat.js";
+export {
+  COVER_DEFENSE,
+  getCellDistance,
+  getCoverDefense,
+  queryAttack,
+  resolveAttack,
+} from "./combat.js";
 export {
   chooseEnemyPlan,
+  createEnemyIntentViewModel,
   ENEMY_AI_LIMITS,
   enumerateEnemyPlans,
   resolveEnemyOverwatch,
@@ -36,6 +43,8 @@ export { getReachableDestinations, resolveMove } from "./movement.js";
 export { resolveMoveWithOverwatch } from "./movementWithOverwatch.js";
 export {
   createOverwatchCommitment,
+  getOverwatchConeWidthRatio,
+  getOverwatchHalfAngle,
   getOverwatchReactionEligibility,
   getOverwatchDirection,
   isCellInOverwatchCone,

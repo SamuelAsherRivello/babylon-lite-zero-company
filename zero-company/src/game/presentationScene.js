@@ -12,7 +12,11 @@ import {
   Vector3,
   VertexData,
 } from "@babylonjs/core";
-import { cellToWorld, OVERWATCH_PROFILE } from "./rules/index.js";
+import {
+  cellToWorld,
+  getOverwatchHalfAngle,
+  OVERWATCH_PROFILE,
+} from "./rules/index.js";
 
 const COLORS = Object.freeze({
   arena: Color3.FromHexString("#707574"),
@@ -124,6 +128,7 @@ function clamp01(value) {
 
 export function sampleUnitPresentationPose({
   status,
+  coverDefense = false,
   elapsed,
   stateElapsed = elapsed,
   phaseOffset = 0,
@@ -185,15 +190,25 @@ export function sampleUnitPresentationPose({
   }
 
   if (status === "overwatch") {
+    if (coverDefense) {
+      pose.positionY = -0.14;
+      pose.scaleY = 0.86;
+      pose.rotationX = 0.05;
+    }
     if (!reducedMotion) {
-      pose.positionY = Math.sin(phase * 1.4) * 0.018;
+      pose.positionY += Math.sin(phase * 1.4) * 0.018;
       pose.rotationY = Math.sin(phase * 1.8) * 0.025;
     }
     return pose;
   }
 
+  if (coverDefense) {
+    pose.positionY = -0.14;
+    pose.scaleY = 0.86;
+    pose.rotationX = 0.05;
+  }
   if (!reducedMotion) {
-    pose.positionY = Math.sin(phase) * 0.025;
+    pose.positionY += Math.sin(phase) * 0.025;
     pose.rotationZ = Math.sin(phase * 0.7) * 0.009;
   }
   return pose;
@@ -478,7 +493,7 @@ export function createOverwatchPreviewController(scene, material) {
               origin: [origin.x, origin.y + 0.02, origin.z],
               direction: [(target.x - origin.x) / length, 0, (target.z - origin.z) / length],
               range: preview.range ?? OVERWATCH_PROFILE.range,
-              halfAngle: preview.halfAngle ?? OVERWATCH_PROFILE.halfAngle,
+              halfAngle: preview.halfAngle ?? getOverwatchHalfAngle(1),
             },
           },
         },
@@ -504,6 +519,149 @@ export function createOverwatchPreviewController(scene, material) {
   }
 
   return { clear, getTipWorld, setPreview, setPreviews };
+}
+
+export function getEnemyIntentPreviewSummary(intent) {
+  if (!intent) {
+    return { kind: "none", count: 0 };
+  }
+  if (intent.action === "move") {
+    return {
+      kind: "move",
+      count: (intent.path?.length ?? 0) + (intent.destination ? 1 : 0),
+    };
+  }
+  if (intent.action === "shoot") {
+    return {
+      kind: "shoot",
+      count: intent.originCell && intent.targetCell ? 1 : 0,
+    };
+  }
+  if (intent.action === "overwatch") {
+    return {
+      kind: "overwatch",
+      count: intent.originCell && intent.targetCell ? 1 : 0,
+    };
+  }
+  return { kind: intent.action, count: 0 };
+}
+
+export function createEnemyIntentPreviewController(scene, materials) {
+  let meshes = [];
+
+  function clear() {
+    for (const mesh of meshes) {
+      mesh.dispose();
+    }
+    meshes = [];
+  }
+
+  function addMoveCell(cell, index, isDestination = false) {
+    const world = cellToWorld(cell);
+    const mesh = MeshBuilder.CreateGround(
+      `enemy-intent-move-${index}-${cell.column}-${cell.row}`,
+      { width: isDestination ? 0.86 : 0.64, height: isDestination ? 0.86 : 0.64 },
+      scene,
+    );
+    mesh.position = new Vector3(world.x, world.y + 0.026, world.z);
+    mesh.material = isDestination ? materials.enemy : materials.movement;
+    mesh.isPickable = false;
+    mesh.enableEdgesRendering();
+    mesh.edgesColor = new Color4(COLORS.enemy.r, COLORS.enemy.g, COLORS.enemy.b, 0.86);
+    mesh.edgesWidth = isDestination ? 2 : 1.25;
+    mesh.metadata = {
+      kind: isDestination ? "enemy-intent-destination" : "enemy-intent-path",
+      presentationOnly: true,
+      cell: { ...cell },
+    };
+    meshes.push(mesh);
+  }
+
+  function addShotLine(intent) {
+    const origin = cellToWorld(intent.originCell);
+    const target = cellToWorld(intent.targetCell);
+    const line = MeshBuilder.CreateLines(
+      `enemy-intent-shot-${intent.unitId}-${intent.targetId}`,
+      {
+        points: [
+          new Vector3(origin.x, origin.y + 0.42, origin.z),
+          new Vector3(target.x, target.y + 0.42, target.z),
+        ],
+      },
+      scene,
+    );
+    line.color = COLORS.enemy;
+    line.alpha = 0.88;
+    line.isPickable = false;
+    line.metadata = {
+      kind: "enemy-intent-shot",
+      presentationOnly: true,
+      unitId: intent.unitId,
+      targetId: intent.targetId,
+    };
+    meshes.push(line);
+  }
+
+  function addOverwatchCone(intent) {
+    const origin = cellToWorld(intent.originCell);
+    const target = cellToWorld(intent.targetCell);
+    const length = Math.hypot(target.x - origin.x, target.z - origin.z) || 1;
+    const cone = createOverwatchCone(
+      scene,
+      {
+        feedback: {
+          overwatch: {
+            origin: [origin.x, origin.y + 0.035, origin.z],
+            direction: [(target.x - origin.x) / length, 0, (target.z - origin.z) / length],
+            range: intent.range ?? OVERWATCH_PROFILE.range,
+            halfAngle: intent.halfAngle ?? getOverwatchHalfAngle(1),
+          },
+        },
+      },
+      materials.overwatch,
+    );
+    cone.name = `enemy-intent-overwatch-${intent.unitId}`;
+    cone.metadata = {
+      kind: "enemy-intent-overwatch",
+      presentationOnly: true,
+      unitId: intent.unitId,
+    };
+    meshes.push(cone);
+  }
+
+  function setIntent(intent) {
+    clear();
+    if (!intent) {
+      return getEnemyIntentPreviewSummary(intent);
+    }
+
+    if (intent.action === "move") {
+      for (const [index, cell] of (intent.path ?? []).entries()) {
+        addMoveCell(cell, index);
+      }
+      if (intent.destination) {
+        addMoveCell(intent.destination, intent.path?.length ?? 0, true);
+      }
+    } else if (intent.action === "shoot" && intent.originCell && intent.targetCell) {
+      addShotLine(intent);
+    } else if (intent.action === "overwatch" && intent.originCell && intent.targetCell) {
+      addOverwatchCone(intent);
+    }
+
+    return getEnemyIntentPreviewSummary(intent);
+  }
+
+  function getSnapshot() {
+    return {
+      meshes: meshes.map((mesh) => ({
+        name: mesh.name,
+        pickable: mesh.isPickable,
+        kind: mesh.metadata?.kind ?? null,
+      })),
+    };
+  }
+
+  return { clear, getSnapshot, setIntent };
 }
 
 function getHierarchyBounds(meshes) {
@@ -709,6 +867,7 @@ export function createUnitStateAnimator(scene, units, { reducedMotion = false } 
     units.map((unit) => [unit.descriptor.id, {
       status: "idle",
       overwatch: null,
+      coverDefense: false,
       enteredAt: 0,
       transient: null,
     }]),
@@ -723,6 +882,7 @@ export function createUnitStateAnimator(scene, units, { reducedMotion = false } 
       const activeState = state.transient ?? state;
       const pose = sampleUnitPresentationPose({
         status: activeState.status,
+        coverDefense: state.coverDefense,
         elapsed,
         stateElapsed: Math.max(0, elapsed - activeState.enteredAt),
         phaseOffset: index * 0.72,
@@ -758,6 +918,7 @@ export function createUnitStateAnimator(scene, units, { reducedMotion = false } 
         states.set(stateUnit.id, {
           status,
           overwatch: stateUnit.overwatch,
+          coverDefense: Boolean(stateUnit.coverDefense),
           enteredAt: previous?.status === status ? previous.enteredAt : elapsed,
           transient: status === "dead" ? null : previous?.transient ?? null,
         });
@@ -800,6 +961,7 @@ export function createUnitStateAnimator(scene, units, { reducedMotion = false } 
         ),
         modelPosition: unit.model.position.asArray(),
         modelRotation: unit.model.rotation.asArray(),
+        modelScaling: unit.model.scaling.asArray(),
       }));
     },
     dispose() {

@@ -5,6 +5,7 @@ import {
   createPresentationFailureGate,
   createPresentationQueue,
   createShotFeedbackTimeline,
+  getEnemyIntentPreviewSummary,
   getPresentationTimings,
   resolvePresentationStatus,
   sampleUnitPresentationPose,
@@ -80,6 +81,43 @@ test("presentation poses distinguish moving, shooting, damage, overwatch, and de
   assert.equal(settled.rotationZ, -1.42);
 });
 
+test("cover defense lowers only idle and overwatch presentation poses", () => {
+  const idle = sampleUnitPresentationPose({ status: "idle", elapsed: 0.25, reducedMotion: true });
+  const coveredIdle = sampleUnitPresentationPose({
+    status: "idle",
+    coverDefense: true,
+    elapsed: 0.25,
+    reducedMotion: true,
+  });
+  const coveredOverwatch = sampleUnitPresentationPose({
+    status: "overwatch",
+    coverDefense: true,
+    elapsed: 0.25,
+    reducedMotion: true,
+  });
+  const coveredMoving = sampleUnitPresentationPose({
+    status: "moving",
+    coverDefense: true,
+    elapsed: 0.25,
+    reducedMotion: true,
+  });
+  const coveredDead = sampleUnitPresentationPose({
+    status: "dead",
+    coverDefense: true,
+    elapsed: 1,
+    stateElapsed: 1,
+    reducedMotion: true,
+  });
+
+  assert.equal(idle.positionY, 0);
+  assert.ok(coveredIdle.positionY < idle.positionY);
+  assert.ok(coveredIdle.scaleY < idle.scaleY);
+  assert.ok(coveredIdle.rotationX > idle.rotationX);
+  assert.ok(coveredOverwatch.positionY < 0);
+  assert.equal(coveredMoving.positionY, 0);
+  assert.equal(coveredDead.rotationZ, -1.42);
+});
+
 test("shot feedback timeline keeps facing, muzzle, tracer, impact, and completion ordered", () => {
   assert.deepEqual(createShotFeedbackTimeline(true), [
     "shot-facing",
@@ -126,4 +164,32 @@ test("presentation queue preserves order and continues after failed feedback", a
     "failed:fallback",
     "last:start",
   ]);
+});
+
+test("enemy intent preview summaries expose kind and preview mesh count", () => {
+  assert.deepEqual(getEnemyIntentPreviewSummary(null), { kind: "none", count: 0 });
+  assert.deepEqual(
+    getEnemyIntentPreviewSummary({
+      action: "move",
+      destination: { column: 2, row: 2 },
+      path: [{ column: 2, row: 5 }, { column: 2, row: 4 }],
+    }),
+    { kind: "move", count: 3 },
+  );
+  assert.deepEqual(
+    getEnemyIntentPreviewSummary({
+      action: "shoot",
+      originCell: { column: 2, row: 3 },
+      targetCell: { column: 2, row: 2 },
+    }),
+    { kind: "shoot", count: 1 },
+  );
+  assert.deepEqual(
+    getEnemyIntentPreviewSummary({
+      action: "overwatch",
+      originCell: { column: 6, row: 6 },
+      targetCell: { column: 6, row: 1 },
+    }),
+    { kind: "overwatch", count: 1 },
+  );
 });

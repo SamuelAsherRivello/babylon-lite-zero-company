@@ -48,6 +48,7 @@ function makeCommitment({
   direction = { column: 0, row: 1 },
   shotsRemaining = 1,
 }) {
+  const widthRatio = rules.getOverwatchConeWidthRatio(shotsRemaining);
   return {
     ownerId,
     originCell: { ...originCell },
@@ -57,7 +58,8 @@ function makeCommitment({
     },
     direction: { ...direction },
     range: 6,
-    halfAngle: Math.PI / 4,
+    widthRatio,
+    halfAngle: rules.getOverwatchHalfAngle(shotsRemaining),
     committedActionPoints: shotsRemaining,
     shotsRemaining,
   };
@@ -88,6 +90,43 @@ function reactionState({ shotsRemaining = 1, moverHealth = 10 } = {}) {
     random: createScriptedRandom([0, 0.999, 0, 0.999, 0, 0.999]),
   };
 }
+
+test("Overwatch cone width grows from 20% to 45% with committed AP", () => {
+  const getWidthRatio = requireExport("getOverwatchConeWidthRatio");
+  const getHalfAngle = requireExport("getOverwatchHalfAngle");
+  const isCellInCone = requireExport("isCellInOverwatchCone");
+  const expectedRatios = [0.2, 0.325, 0.45];
+
+  for (const [index, expectedRatio] of expectedRatios.entries()) {
+    const actionPoints = index + 1;
+    const widthRatio = getWidthRatio(actionPoints);
+    const halfAngle = getHalfAngle(actionPoints);
+
+    assert.equal(widthRatio, expectedRatio);
+    assert.ok(
+      Math.abs(Math.tan(halfAngle) * 2 - expectedRatio) < 1e-12,
+      `${actionPoints} AP cone should be ${expectedRatio * 100}% as wide as its range`,
+    );
+  }
+
+  const boundaryCell = { column: 1, row: 5 };
+  assert.equal(
+    isCellInCone(makeCommitment({
+      ownerId: "player-1",
+      originCell: { column: 0, row: 0 },
+      shotsRemaining: 1,
+    }), boundaryCell),
+    false,
+  );
+  assert.equal(
+    isCellInCone(makeCommitment({
+      ownerId: "player-1",
+      originCell: { column: 0, row: 0 },
+      shotsRemaining: 3,
+    }), boundaryCell),
+    true,
+  );
+});
 
 test("selecting Overwatch starts a preview without spending AP", () => {
   const initial = rules.createInitialBattle({ seed: 12345 });
@@ -171,7 +210,8 @@ test("CONFIRM_OVERWATCH commits the latest retargeted preview", () => {
   assert.deepEqual(unit.overwatch.targetCell, { column: 6, row: 1 });
   assert.deepEqual(unit.overwatch.direction, { column: 1, row: 0 });
   assert.equal(unit.overwatch.range, 6);
-  assert.equal(unit.overwatch.halfAngle, Math.PI / 4);
+  assert.equal(unit.overwatch.widthRatio, 0.325);
+  assert.equal(unit.overwatch.halfAngle, rules.getOverwatchHalfAngle(2));
   assert.equal(outcome.state.pendingAction, null);
 });
 
@@ -344,6 +384,46 @@ test("cone misses and cover-blocked LOS consume no shot or random draw", () => {
   assert.equal(getUnit(blocked.state, "player-1").overwatch.shotsRemaining, 2);
   assert.deepEqual(coneMiss.state.random, randomBefore);
   assert.deepEqual(blocked.state.random, randomBefore);
+});
+
+test("covered cone entry resolves with cover-adjusted probability and consumes a shot", () => {
+  const getOverwatchReactionEligibility = requireExport(
+    "getOverwatchReactionEligibility",
+  );
+  const resolveOverwatchReactions = requireExport("resolveOverwatchReactions");
+  const state = reactionState({ shotsRemaining: 1 });
+  const level = {
+    ...openLevel(),
+    covers: [
+      {
+        id: "defensive-cover",
+        cells: [{ column: 1, row: 3 }],
+      },
+    ],
+  };
+  const eligibility = getOverwatchReactionEligibility(state, {
+    reactorId: "player-1",
+    moverId: "enemy-1",
+    completedCell: { column: 2, row: 4 },
+    level,
+  });
+  const outcome = resolveOverwatchReactions(state, {
+    moverId: "enemy-1",
+    completedCell: { column: 2, row: 4 },
+    remainingPath: [],
+    stepCompleted: true,
+    level,
+  });
+
+  assert.equal(eligibility.eligible, true);
+  assert.equal(eligibility.preview.coverDefense.active, true);
+  assert.equal(
+    eligibility.preview.hitProbability,
+    Number((eligibility.preview.baseHitProbability - 0.2).toFixed(6)),
+  );
+  assert.equal(outcome.reactions.length, 1);
+  assert.equal(outcome.reactions[0].preview.coverDefense.active, true);
+  assert.equal(getUnit(outcome.state, "player-1").overwatch.shotsRemaining, 0);
 });
 
 test("same-side movement and the owner's phase cannot trigger reactions", () => {

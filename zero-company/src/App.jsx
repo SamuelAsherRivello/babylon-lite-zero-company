@@ -18,10 +18,13 @@ import { createZeroCompanyScene } from "./game/index.js";
 import { createAudioController } from "./game/audioController.js";
 import {
   chooseEnemyPlan,
+  createEnemyIntentViewModel,
   createScriptedRandom,
   createInitialBattle,
   dispatchBattleCommand,
   getAttackPreview,
+  getOverwatchConeWidthRatio,
+  getOverwatchHalfAngle,
   getReachableDestinations,
   getUnitInspection,
   resolveEnemyOverwatch,
@@ -41,7 +44,12 @@ function createRuntimeBattle() {
   }
 
   const scenario = new URLSearchParams(window.location.search).get("e2e-result");
-  if (scenario !== "victory" && scenario !== "defeat" && scenario !== "reaction") {
+  if (
+    scenario !== "victory" &&
+    scenario !== "defeat" &&
+    scenario !== "reaction" &&
+    scenario !== "cover"
+  ) {
     return createInitialBattle();
   }
 
@@ -52,7 +60,7 @@ function createRuntimeBattle() {
     let reactionState = state;
     for (const command of [
       { type: "BEGIN_ACTION", unitId: "player-1", action: "overwatch" },
-      { type: "AIM_OVERWATCH", unitId: "player-1", targetCell: { column: 2, row: 6 } },
+      { type: "AIM_OVERWATCH", unitId: "player-1", targetCell: { column: 4, row: 5 } },
       { type: "CONFIRM_OVERWATCH", unitId: "player-1" },
       { type: "REQUEST_END_TURN" },
       { type: "CONFIRM_END_TURN" },
@@ -60,6 +68,20 @@ function createRuntimeBattle() {
       reactionState = dispatchBattleCommand(reactionState, command).state;
     }
     return reactionState;
+  }
+  if (scenario === "cover") {
+    return {
+      ...state,
+      units: state.units.map((unit) => {
+        if (unit.id === "enemy-1") {
+          return { ...unit, cell: { column: 7, row: 3 } };
+        }
+        if (unit.id === "enemy-2" || unit.id === "enemy-3") {
+          return { ...unit, health: 0 };
+        }
+        return unit;
+      }),
+    };
   }
   return {
     ...state,
@@ -109,6 +131,47 @@ const weaponLabels = Object.freeze({
   long: "Longarm",
 });
 
+function formatCell(cell) {
+  return cell ? `C${cell.column} R${cell.row}` : "unknown";
+}
+
+function formatPercent(value) {
+  return `${Math.round((value ?? 0) * 100)}%`;
+}
+
+function formatEnemyIntent(intent, battleUnits) {
+  if (!intent) {
+    return "";
+  }
+
+  const unitLabel = battleUnits.get(intent.unitId)?.label ?? "Enemy";
+  const targetLabel = intent.targetId
+    ? battleUnits.get(intent.targetId)?.label ?? intent.targetId
+    : null;
+  const apText = `${intent.cost ?? 0} AP`;
+
+  if (intent.action === "shoot") {
+    return `${unitLabel}: SHOOT ${targetLabel ?? "target"} (${apText}) - ${formatPercent(intent.preview?.hitProbability)} hit, ${intent.preview?.maxDamage ?? 0} max damage`;
+  }
+
+  if (intent.action === "move") {
+    const pathSteps = intent.path?.length ?? 0;
+    const followUp = intent.followUp?.targetId
+      ? `; then may shoot ${battleUnits.get(intent.followUp.targetId)?.label ?? intent.followUp.targetId}`
+      : "";
+    return `${unitLabel}: MOVE to ${formatCell(intent.destination)} (${apText}, ${pathSteps} steps)${followUp}`;
+  }
+
+  if (intent.action === "overwatch") {
+    const coneWidth = intent.widthRatio == null
+      ? "cone"
+      : `${Math.round(intent.widthRatio * 100)}% cone`;
+    return `${unitLabel}: OVERWATCH ${formatCell(intent.targetCell)} (${apText}, range ${intent.range ?? "?"}, ${coneWidth})`;
+  }
+
+  return `${unitLabel}: ${intent.action.toUpperCase()} (${apText})`;
+}
+
 function projectedPositionsMatch(previous, next) {
   if (previous.length !== next.length) {
     return false;
@@ -145,7 +208,9 @@ function usePortraitBlocker() {
 function GameScene({
   battle,
   committedOverwatchPreviews,
+  coverDefenseUnitIds = [],
   enemyIntent,
+  enemyIntentText,
   failNextPresentation,
   inputEnabled,
   movePresentation,
@@ -167,6 +232,16 @@ function GameScene({
   const gameRef = useRef(null);
   const movementDestinationsRef = useRef(movementDestinations);
   movementDestinationsRef.current = movementDestinations;
+  const presentationBattle = useMemo(() => {
+    const defendedUnits = new Set(coverDefenseUnitIds);
+    return {
+      ...battle,
+      units: battle.units.map((unit) => ({
+        ...unit,
+        coverDefense: defendedUnits.has(unit.id),
+      })),
+    };
+  }, [battle, coverDefenseUnitIds]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -256,24 +331,71 @@ function GameScene({
         return;
       }
       canvasRef.current.dataset.unitPresentationStates = JSON.stringify(
-        game.syncUnitStates(battle),
+        game.syncUnitStates(presentationBattle),
       );
+      window.requestAnimationFrame(() => {
+        if (active && canvasRef.current) {
+          canvasRef.current.dataset.unitPresentationStates = JSON.stringify(
+            game.getPresentationSnapshot().units,
+          );
+        }
+      });
     });
     return () => {
       active = false;
     };
-  }, [battle]);
+  }, [battle, presentationBattle]);
 
   useEffect(() => {
     if (canvasRef.current) {
       canvasRef.current.dataset.enemyIntent = JSON.stringify(enemyIntent);
+      canvasRef.current.dataset.enemyIntentText = enemyIntentText;
       if (enemyIntent) {
         const history = JSON.parse(canvasRef.current.dataset.enemyIntentHistory ?? "[]");
         history.push(enemyIntent);
         canvasRef.current.dataset.enemyIntentHistory = JSON.stringify(history);
       }
     }
-  }, [enemyIntent]);
+  }, [enemyIntent, enemyIntentText]);
+
+  useEffect(() => {
+    const game = gameRef.current;
+    if (!game) {
+      return undefined;
+    }
+
+    let active = true;
+    game.ready
+      .then(() => {
+        if (!active || !canvasRef.current) {
+          return;
+        }
+        try {
+          if (failNextPresentation === "enemy-intent") {
+            throw new Error("Forced enemy intent preview failure for DEV verification.");
+          }
+          const summary = game.setEnemyIntentPreview(enemyIntent);
+          const snapshot = game.getPresentationSnapshot().enemyIntentPreview;
+          canvasRef.current.dataset.enemyIntentPreviewKind = summary.kind;
+          canvasRef.current.dataset.enemyIntentPreviewCount = String(summary.count);
+          canvasRef.current.dataset.enemyIntentPreviewMeshes = JSON.stringify(snapshot.meshes);
+          canvasRef.current.dataset.enemyIntentPreviewFallback = "false";
+        } catch {
+          try {
+            game.setEnemyIntentPreview(null);
+          } catch {
+            // Intent previews are presentation-only; enemy resolution must continue.
+          }
+          canvasRef.current.dataset.enemyIntentPreviewKind = enemyIntent?.action ?? "none";
+          canvasRef.current.dataset.enemyIntentPreviewCount = "0";
+          canvasRef.current.dataset.enemyIntentPreviewMeshes = "[]";
+          canvasRef.current.dataset.enemyIntentPreviewFallback = "true";
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [enemyIntent, failNextPresentation]);
 
   useEffect(() => {
     const game = gameRef.current;
@@ -450,7 +572,7 @@ function GameScene({
 
     let active = true;
     game.ready
-      .then(() => game.syncBattleState(battle))
+      .then(() => game.syncBattleState(presentationBattle))
       .finally(() => {
         if (active) {
           onPresentationSettled();
@@ -459,7 +581,7 @@ function GameScene({
     return () => {
       active = false;
     };
-  }, [battle, movePresentation, onPresentationSettled, shotPresentation]);
+  }, [movePresentation, onPresentationSettled, presentationBattle, shotPresentation]);
 
   return (
     <canvas
@@ -476,6 +598,7 @@ function UnitHud({ active, attackPreview, onSelect, selected, unit }) {
   }
 
   const isPlayer = unit.team === "player";
+  const hasCoverDefense = Boolean(attackPreview?.coverDefense?.active);
 
   return (
     <button
@@ -485,6 +608,7 @@ function UnitHud({ active, attackPreview, onSelect, selected, unit }) {
       aria-pressed={selected}
       data-unit-id={unit.id}
       data-unit-status={unit.status}
+      data-cover-defense={hasCoverDefense ? "true" : "false"}
       data-valid-target={attackPreview?.selectable ? "true" : "false"}
       onClick={() => onSelect(unit.id)}
       style={{ left: `${unit.x}px`, top: `${unit.y}px` }}
@@ -509,10 +633,12 @@ function UnitHud({ active, attackPreview, onSelect, selected, unit }) {
         </div>
       ) : null}
       {attackPreview ? (
-        <div className={`attack-preview${attackPreview.blocked ? " attack-preview_blocked" : ""}`}>
+        <div
+          className={`attack-preview${attackPreview.blocked ? " attack-preview_blocked" : ""}${hasCoverDefense ? " attack-preview_cover" : ""}`}
+        >
           {attackPreview.blocked
             ? "Blocked / 0%"
-            : `${Math.round(attackPreview.hitProbability * 100)}% / ${attackPreview.maxDamage} dmg`}
+            : `${Math.round(attackPreview.hitProbability * 100)}% / ${attackPreview.maxDamage} dmg${hasCoverDefense ? " | Cover -20pp" : ""}`}
         </div>
       ) : null}
     </button>
@@ -671,6 +797,7 @@ export function App() {
     presentationBusy ? [] : selectedUnit?.availableActions ?? [],
   );
   const battleUnits = new Map(battle.units.map((unit) => [unit.id, unit]));
+  const enemyIntentText = formatEnemyIntent(enemyIntent, battleUnits);
   battleRef.current = battle;
   presentationBusyRef.current = presentationBusy;
   const movementDestinations =
@@ -684,6 +811,8 @@ export function App() {
     ? {
         originCell: overwatchUnit.cell,
         targetCell: battle.pendingAction.targetCell,
+        widthRatio: getOverwatchConeWidthRatio(overwatchUnit.actionPoints),
+        halfAngle: getOverwatchHalfAngle(overwatchUnit.actionPoints),
       }
     : null;
   const committedOverwatchPreviews = useMemo(() => battle.units
@@ -693,6 +822,7 @@ export function App() {
       originCell: unit.overwatch.originCell,
       targetCell: unit.overwatch.targetCell,
       range: unit.overwatch.range,
+      widthRatio: unit.overwatch.widthRatio,
       halfAngle: unit.overwatch.halfAngle,
     })), [battle.units]);
   const attackPreviews = new Map();
@@ -706,6 +836,9 @@ export function App() {
       }
     }
   }
+  const coverDefenseUnitIds = Array.from(attackPreviews)
+    .filter(([, preview]) => preview.coverDefense?.active)
+    .map(([unitId]) => unitId);
   const confirmationReady = battle.pendingConfirmation === "end-turn" || (
     battle.pendingAction?.action === "move" && Boolean(battle.pendingAction.targetCell)
   ) || (
@@ -746,6 +879,12 @@ export function App() {
     setSelectedUnitId(restarted.selectedUnitId);
     setBattle(restarted);
   }, []);
+
+  useEffect(() => {
+    if (battle.phase !== "enemy" || battle.result) {
+      setEnemyIntent(null);
+    }
+  }, [battle.phase, battle.result]);
 
   const handleCellSelect = useCallback((cell) => {
     const current = battleRef.current;
@@ -910,21 +1049,18 @@ export function App() {
           unitId: "enemy-1",
           action: "move",
           cost: 1,
-          destination: { column: 2, row: 5 },
+          destination: { column: 4, row: 5 },
+          path: [{ column: 3, row: 5 }, { column: 4, row: 5 }],
+          sequence: [{ action: "move" }],
         }
       : chooseEnemyPlan(battle)) ?? {
       unitId: battle.activeUnitId,
       action: "relinquish",
       cost: 0,
       reason: "activation-complete",
+      sequence: [],
     };
-    setEnemyIntent({
-      unitId: plan.unitId,
-      action: plan.action,
-      cost: plan.cost,
-      targetId: plan.targetId ?? null,
-      destination: plan.destination ?? null,
-    });
+    setEnemyIntent(createEnemyIntentViewModel(plan, battle));
 
     const timeout = window.setTimeout(() => {
       const current = battleRef.current;
@@ -944,6 +1080,7 @@ export function App() {
         });
         if (outcome.accepted) {
           setPresentationBusy(true);
+          setEnemyIntent(null);
           setBattle({
             ...current,
             units: current.units.map((unit) =>
@@ -967,6 +1104,7 @@ export function App() {
         });
         if (outcome.accepted) {
           setPresentationBusy(true);
+          setEnemyIntent(null);
           setBattle({
             ...current,
             units: current.units.map((unit) => {
@@ -992,6 +1130,7 @@ export function App() {
         const outcome = resolveEnemyOverwatch(current, plan);
         if (outcome.accepted) {
           playSound("overwatch");
+          setEnemyIntent(null);
           setBattle(outcome.state);
           return;
         }
@@ -1015,7 +1154,9 @@ export function App() {
       <GameScene
         battle={battle}
         committedOverwatchPreviews={committedOverwatchPreviews}
+        coverDefenseUnitIds={coverDefenseUnitIds}
         enemyIntent={enemyIntent}
+        enemyIntentText={enemyIntentText}
         failNextPresentation={failNextPresentation}
         inputEnabled={!portraitBlocked}
         movePresentation={movePresentation}
@@ -1035,7 +1176,7 @@ export function App() {
       />,
       contentLayer,
     );
-  }, [battle, committedOverwatchPreviews, contentLayer, enemyIntent, failNextPresentation, handleCellSelect, handleHudPositions, handleLoadingChange, handleMoveComplete, handleMoveStep, handlePresentationSettled, handleReactionFeedback, handleSelectionChange, handleShotComplete, movePresentation, movementDestinations, overwatchPreview, portraitBlocked, selectedUnitId, shotPresentation]);
+  }, [battle, committedOverwatchPreviews, contentLayer, coverDefenseUnitIds, enemyIntent, enemyIntentText, failNextPresentation, handleCellSelect, handleHudPositions, handleLoadingChange, handleMoveComplete, handleMoveStep, handlePresentationSettled, handleReactionFeedback, handleSelectionChange, handleShotComplete, movePresentation, movementDestinations, overwatchPreview, portraitBlocked, selectedUnitId, shotPresentation]);
 
   useEffect(() => {
     const uiLayer = document.getElementById("ui_layer");
@@ -1104,9 +1245,8 @@ export function App() {
           {battle.phase === "enemy" ? "ENEMY TURN" : battle.phase === "result" ? "BATTLE OVER" : "PLAYER TURN"}
         </div>
         {battle.phase === "enemy" && enemyIntent ? (
-          <div className="enemy-intent" role="status">
-            {battleUnits.get(enemyIntent.unitId)?.label ?? "Enemy"}: {enemyIntent.action.toUpperCase()}
-            {enemyIntent.cost > 0 ? ` (${enemyIntent.cost} AP)` : ""}
+          <div className="enemy-intent" role="status" aria-label={enemyIntentText}>
+            {enemyIntentText}
           </div>
         ) : null}
         <InspectionPanel unit={selectedUnit} />

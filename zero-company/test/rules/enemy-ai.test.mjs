@@ -4,7 +4,7 @@ import test from "node:test";
 import * as rules from "../../src/game/rules/index.js";
 
 function requireAiApi() {
-  for (const name of ["enumerateEnemyPlans", "chooseEnemyPlan"]) {
+  for (const name of ["enumerateEnemyPlans", "chooseEnemyPlan", "createEnemyIntentViewModel"]) {
     assert.equal(
       typeof rules[name],
       "function",
@@ -14,6 +14,7 @@ function requireAiApi() {
   return {
     enumerateEnemyPlans: rules.enumerateEnemyPlans,
     chooseEnemyPlan: rules.chooseEnemyPlan,
+    createEnemyIntentViewModel: rules.createEnemyIntentViewModel,
   };
 }
 
@@ -225,6 +226,36 @@ test("expected damage is primary and planning never reads future random results"
   assert.deepEqual(unfavorable.random, unfavorableRandomBefore);
 });
 
+test("enemy shoot plans convert to serializable intent without consuming random", () => {
+  const { chooseEnemyPlan, createEnemyIntentViewModel } = requireAiApi();
+  const level = levelWithCovers();
+  let state = scenarioState({
+    enemyCell: { column: 2, row: 3 },
+    enemyActionPoints: 1,
+    enemyWeaponId: "short",
+    playerCell: { column: 2, row: 2 },
+  });
+  state = setUnit(state, "player-2", {
+    health: 10,
+    cell: { column: 2, row: 0 },
+  });
+  const randomBefore = structuredClone(state.random);
+  const plan = chooseEnemyPlan(state, { level });
+  const intent = createEnemyIntentViewModel(plan, state);
+
+  assert.equal(intent.action, "shoot");
+  assert.equal(intent.unitId, "enemy-1");
+  assert.equal(intent.targetId, "player-1");
+  assert.equal(intent.cost, 1);
+  assert.deepEqual(intent.originCell, { column: 2, row: 3 });
+  assert.deepEqual(intent.targetCell, { column: 2, row: 2 });
+  assert.equal(intent.preview.hitProbability, plan.preview.hitProbability);
+  assert.equal(intent.preview.maxDamage, plan.preview.maxDamage);
+  assert.deepEqual(intent.sequence, ["shoot"]);
+  assert.doesNotThrow(() => JSON.stringify(intent));
+  assert.deepEqual(state.random, randomBefore);
+});
+
 test("an immediate adjacent best shot is selected as the first action", () => {
   const { chooseEnemyPlan } = requireAiApi();
   let state = scenarioState({
@@ -250,7 +281,7 @@ test("an immediate adjacent best shot is selected as the first action", () => {
 });
 
 test("the planner moves closer before shooting when that improves expected damage", () => {
-  const { chooseEnemyPlan } = requireAiApi();
+  const { chooseEnemyPlan, createEnemyIntentViewModel } = requireAiApi();
   const level = levelWithCovers();
   const state = scenarioState({
     enemyCell: { column: 2, row: 6 },
@@ -280,10 +311,50 @@ test("the planner moves closer before shooting when that improves expected damag
     decision.sequence.reduce((sum, step) => sum + step.cost, 0),
     3,
   );
+
+  const stateBefore = structuredClone(state);
+  const intent = createEnemyIntentViewModel(decision, state);
+  assert.equal(intent.action, "move");
+  assert.equal(intent.cost, 2);
+  assert.equal(intent.totalCost, 3);
+  assert.deepEqual(intent.destination, { column: 2, row: 2 });
+  assert.deepEqual(intent.path.at(-1), { column: 2, row: 2 });
+  assert.deepEqual(intent.sequence, ["move", "shoot"]);
+  assert.equal(intent.followUp.action, "shoot");
+  assert.equal(intent.followUp.targetId, "player-1");
+  assert.deepEqual(intent.followUp.targetCell, { column: 2, row: 1 });
+  assert.equal(intent.followUp.preview.maxDamage, decision.followUp.preview.maxDamage);
+  assert.doesNotThrow(() => JSON.stringify(intent));
+  assert.deepEqual(state, stateBefore);
+});
+
+test("the planner can move to flank when cover defense suppresses a shot", () => {
+  const { chooseEnemyPlan } = requireAiApi();
+  const level = levelWithCovers([{ column: 5, row: 3 }]);
+  const state = scenarioState({
+    enemyCell: { column: 4, row: 4 },
+    enemyActionPoints: 3,
+    enemyWeaponId: "balanced",
+    playerCell: { column: 6, row: 4 },
+  });
+  const immediate = rules.getAttackPreview(
+    state,
+    "enemy-1",
+    "player-1",
+    { level },
+  );
+  const decision = chooseEnemyPlan(state, { level });
+
+  assert.equal(immediate.selectable, true);
+  assert.equal(immediate.coverDefense.active, true);
+  assert.equal(decision.action, "move");
+  assert.equal(decision.followUp.targetId, "player-1");
+  assert.equal(decision.followUp.preview.coverDefense.active, false);
+  assert.ok(decision.expectedDamage > expectedDamage(immediate));
 });
 
 test("defensive Overwatch covers the approach lane when no attack can deal damage", () => {
-  const { chooseEnemyPlan } = requireAiApi();
+  const { chooseEnemyPlan, createEnemyIntentViewModel } = requireAiApi();
   const level = levelWithCovers([{ column: 6, row: 3 }]);
   const state = scenarioState({
     enemyCell: { column: 6, row: 6 },
@@ -302,6 +373,19 @@ test("defensive Overwatch covers the approach lane when no attack can deal damag
     decision.sequence.map((step) => step.action),
     ["overwatch"],
   );
+
+  const stateBefore = structuredClone(state);
+  const intent = createEnemyIntentViewModel(decision, state);
+  assert.equal(intent.action, "overwatch");
+  assert.equal(intent.cost, 1);
+  assert.deepEqual(intent.originCell, { column: 6, row: 6 });
+  assert.deepEqual(intent.targetCell, { column: 6, row: 1 });
+  assert.deepEqual(intent.direction, { column: 0, row: -1 });
+  assert.equal(intent.range, rules.OVERWATCH_PROFILE.range);
+  assert.equal(intent.widthRatio, decision.widthRatio);
+  assert.equal(intent.halfAngle, decision.halfAngle);
+  assert.deepEqual(intent.sequence, ["overwatch"]);
+  assert.deepEqual(state, stateBefore);
 });
 
 test("equal-utility plans use stable unit and cell tie-breaking", () => {
@@ -333,7 +417,7 @@ test(
   "no useful legal action produces a bounded serializable relinquish decision",
   { timeout: 250 },
   () => {
-    const { chooseEnemyPlan } = requireAiApi();
+    const { chooseEnemyPlan, createEnemyIntentViewModel } = requireAiApi();
     let state = scenarioState({ enemyActionPoints: 3 });
     state = setUnit(state, "player-1", { health: 0 });
     const stateBefore = structuredClone(state);
@@ -348,6 +432,16 @@ test(
       sequence: [],
     });
     assert.doesNotThrow(() => JSON.stringify(decision));
+    assert.deepEqual(createEnemyIntentViewModel(decision, state), {
+      unitId: "enemy-1",
+      action: "relinquish",
+      cost: 0,
+      totalCost: 0,
+      targetId: null,
+      originCell: { column: 2, row: 6 },
+      sequence: [],
+      reason: "no-useful-action",
+    });
     assert.deepEqual(state, stateBefore);
   },
 );

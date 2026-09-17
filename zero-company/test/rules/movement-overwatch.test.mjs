@@ -30,6 +30,7 @@ function openLevel() {
 }
 
 function commitment(ownerId, originCell, direction, shotsRemaining) {
+  const widthRatio = rules.getOverwatchConeWidthRatio(shotsRemaining);
   return {
     ownerId,
     originCell: { ...originCell },
@@ -39,7 +40,8 @@ function commitment(ownerId, originCell, direction, shotsRemaining) {
     },
     direction: { ...direction },
     range: rules.OVERWATCH_PROFILE.range,
-    halfAngle: rules.OVERWATCH_PROFILE.halfAngle,
+    widthRatio,
+    halfAngle: rules.getOverwatchHalfAngle(shotsRemaining),
     committedActionPoints: shotsRemaining,
     shotsRemaining,
   };

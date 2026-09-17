@@ -95,33 +95,52 @@ The three player operatives SHALL carry three fixed archetypes: short-range,
 balanced, and long-range. Each weapon SHALL define maximum hit probability and
 maximum damage at adjacent range. Both values SHALL decrease as the distance
 between grid-cell centers increases in Euclidean world distance according to
-deterministic, testable curves appropriate to that archetype. A hit SHALL never
-exceed the probability or damage displayed before confirmation.
+deterministic, testable curves appropriate to that archetype. When a target has
+cover defense and is not flanked, the displayed hit probability SHALL include
+the deterministic cover reduction. Cover defense SHALL NOT reduce displayed
+damage. A hit SHALL never exceed the probability or damage displayed before
+confirmation.
 
 #### Scenario: Adjacent target receives maximum values
 
-- **WHEN** a shooter evaluates an adjacent enemy with clear line of sight
+- **WHEN** a shooter evaluates an adjacent enemy with clear line of sight and no
+  active cover defense
 - **THEN** the preview shows that weapon's maximum hit probability and maximum
   damage
 
 #### Scenario: More distant target receives lower values
 
 - **WHEN** the same weapon evaluates a farther enemy with clear line of sight
+  and no active cover defense
 - **THEN** its displayed hit probability and maximum damage are both lower
   than the adjacent values
+
+#### Scenario: Cover reduces hit probability only
+
+- **WHEN** a shooter evaluates a visible enemy that has active cover defense
+- **THEN** the preview shows lower hit probability than the same shot without
+  cover defense and keeps the same damage range
 
 ### Requirement: Shooting requires line of sight
 
 A target without an unobstructed line from shooter to target SHALL have zero
 hit probability and SHALL not be selectable for Shoot. The preview SHALL state
 that line of sight is blocked. Only level obstacles block LOS; living and dead
-characters do not.
+characters do not. Cover defense SHALL apply only after line of sight has
+already been established.
 
 #### Scenario: Cover blocks line of sight
 
 - **WHEN** any of the level's full-height cover obstacles intersects the line
   between shooter and target
 - **THEN** the target shows zero hit probability and cannot be confirmed
+
+#### Scenario: Cover defense requires line of sight
+
+- **WHEN** a target is adjacent to cover but the cover obstacle blocks line of
+  sight from the shooter
+- **THEN** the target remains unselectable for blocked line of sight rather than
+  selectable with a cover-defense modifier
 
 ### Requirement: Overwatch consumes remaining AP and requires confirmation
 
@@ -133,6 +152,9 @@ point SHALL show the shared confirmation controls. Only pressing `Confirm?`
 SHALL commit the latest cone, spend all remaining AP, set the reaction-shot
 allowance to the number of AP spent, and make that operative noninteractive
 until its next player turn. Pressing Overwatch again SHALL NOT commit the cone.
+At maximum range, the cone's full width SHALL scale linearly with the AP
+committed: 20% of range for one AP, 32.5% for two AP, and 45% for three AP.
+The preview and committed reaction area SHALL use the same width.
 
 #### Scenario: Cone is retargeted before confirmation
 
@@ -145,13 +167,20 @@ until its next player turn. Pressing Overwatch again SHALL NOT commit the cone.
 - **WHEN** the player presses `Confirm?` with a valid cone while the operative
   has two AP
 - **THEN** both AP are spent, the cone is committed with at most two reaction
-  shots, and the operative cannot take another action until its next turn
+  shots at 32.5% full width, and the operative cannot take another action until
+  its next turn
 
 #### Scenario: Overwatch action button cannot commit
 
 - **WHEN** a valid Overwatch cone is staged and the player presses Overwatch
   again
 - **THEN** no AP is spent and no Overwatch commitment is created
+
+#### Scenario: Available AP changes cone width
+
+- **WHEN** the player previews Overwatch with one, two, or three AP remaining
+- **THEN** the displayed and resolved cone uses a full-width ratio of 20%,
+  32.5%, or 45% respectively
 
 ### Requirement: Overwatch fires only on qualifying opponent movement
 
@@ -160,8 +189,9 @@ After each completed center-to-center movement step, the mover's new cell center
 SHALL be tested against the cone on the ground plane and against obstacle-only
 line of sight. Both tests MUST pass. The unit SHALL make at most one reaction
 shot per AP consumed at commitment, decrementing its remaining shot allowance
-after each reaction. Overwatch SHALL expire at the start of the unit's next
-side turn.
+after each reaction. Overwatch reaction hit probability SHALL use the same
+cover-defense and flanking rules as Shoot. Overwatch SHALL expire at the start
+of the unit's next side turn.
 
 #### Scenario: Opponent enters a cone with clear line of sight
 
@@ -174,6 +204,13 @@ side turn.
 - **WHEN** an opponent's cell center enters the cone but a cover block
   intersects line of sight
 - **THEN** Overwatch does not fire and its remaining shot allowance is unchanged
+
+#### Scenario: Opponent enters cone while defended by cover
+
+- **WHEN** an opponent completes a movement step inside an opposing Overwatch
+  cone with clear line of sight and active cover defense
+- **THEN** the reaction attack resolves using the cover-adjusted hit probability
+  and consumes one committed shot
 
 #### Scenario: Opponent never enters the cone
 

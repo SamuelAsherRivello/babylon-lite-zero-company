@@ -163,6 +163,82 @@ test("blocked attack previews are unselectable with zero hit probability", () =>
   assert.equal(blocked.maxDamage, 0);
 });
 
+test("cover defense applies only from shooter-facing adjacent cover", () => {
+  const baseLevel = requireExport("LEVEL_DEFINITION", "object");
+  const queryAttack = requireExport("queryAttack", "function");
+  const coveredLevel = {
+    ...openLevel(baseLevel),
+    covers: [
+      {
+        id: "test-cover",
+        cells: [{ column: 4, row: 3 }],
+      },
+    ],
+  };
+  const defended = queryAttack({
+    level: coveredLevel,
+    weaponId: "balanced",
+    shooterCell: { column: 2, row: 4 },
+    targetCell: { column: 5, row: 4 },
+    units: [],
+  });
+  const flanked = queryAttack({
+    level: coveredLevel,
+    weaponId: "balanced",
+    shooterCell: { column: 7, row: 4 },
+    targetCell: { column: 5, row: 4 },
+    units: [],
+  });
+  const open = queryAttack({
+    level: openLevel(baseLevel),
+    weaponId: "balanced",
+    shooterCell: { column: 2, row: 4 },
+    targetCell: { column: 5, row: 4 },
+    units: [],
+  });
+
+  assert.equal(defended.hasLineOfSight, true);
+  assert.equal(defended.selectable, true);
+  assert.equal(defended.baseHitProbability, open.hitProbability);
+  assert.equal(defended.coverDefense.active, true);
+  assert.equal(defended.coverDefense.reduction, 0.2);
+  assert.equal(defended.hitProbability, Number((open.hitProbability - 0.2).toFixed(6)));
+  assert.deepEqual(
+    defended.terrainModifiers.map((modifier) => modifier.id),
+    ["cover-defense"],
+  );
+
+  assert.equal(flanked.coverDefense.active, false);
+  assert.equal(flanked.hitProbability, flanked.baseHitProbability);
+  assert.deepEqual(flanked.terrainModifiers, []);
+});
+
+test("cover defense keeps legal low-probability shots selectable at five percent", () => {
+  const baseLevel = requireExport("LEVEL_DEFINITION", "object");
+  const queryAttack = requireExport("queryAttack", "function");
+  const level = {
+    ...openLevel(baseLevel),
+    covers: [
+      {
+        id: "test-cover",
+        cells: [{ column: 10, row: 3 }],
+      },
+    ],
+  };
+  const preview = queryAttack({
+    level,
+    weaponId: "short",
+    shooterCell: { column: 0, row: 4 },
+    targetCell: { column: 11, row: 4 },
+    units: [],
+  });
+
+  assert.equal(preview.hasLineOfSight, true);
+  assert.equal(preview.selectable, true);
+  assert.equal(preview.coverDefense.active, true);
+  assert.equal(preview.hitProbability, 0.05);
+});
+
 test("attack resolution consumes the exact shared preview calculation", () => {
   const level = openLevel(requireExport("LEVEL_DEFINITION", "object"));
   const queryAttack = requireExport("queryAttack", "function");
@@ -186,6 +262,38 @@ test("attack resolution consumes the exact shared preview calculation", () => {
   assert.ok(resolution.damage >= preview.minDamage);
   assert.ok(resolution.damage <= preview.maxDamage);
   assert.equal(resolution.randomSource.index, 2);
+});
+
+test("attack resolution uses the same cover-adjusted preview probability", () => {
+  const baseLevel = requireExport("LEVEL_DEFINITION", "object");
+  const queryAttack = requireExport("queryAttack", "function");
+  const resolveAttack = requireExport("resolveAttack", "function");
+  const createScriptedRandom = requireExport("createScriptedRandom", "function");
+  const level = {
+    ...openLevel(baseLevel),
+    covers: [
+      {
+        id: "test-cover",
+        cells: [{ column: 4, row: 3 }],
+      },
+    ],
+  };
+  const attack = {
+    level,
+    weaponId: "balanced",
+    shooterCell: { column: 2, row: 4 },
+    targetCell: { column: 5, row: 4 },
+    units: [],
+  };
+  const preview = queryAttack(attack);
+  const miss = resolveAttack({
+    ...attack,
+    randomSource: createScriptedRandom([preview.hitProbability]),
+  });
+
+  assert.deepEqual(miss.preview, preview);
+  assert.equal(miss.hit, false);
+  assert.equal(miss.hitRoll, preview.hitProbability);
 });
 
 test("seeded and scripted resolution are deterministic and stay within preview", () => {

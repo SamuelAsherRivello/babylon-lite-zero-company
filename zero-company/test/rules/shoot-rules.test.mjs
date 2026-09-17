@@ -211,6 +211,65 @@ test("cover-blocked and cancelled targeting cannot resolve a shot", () => {
   assert.equal(cancelled.state, cancelledState);
 });
 
+test("covered visible targets remain selectable with cover-adjusted probability", () => {
+  const getAttackPreview = requireExport("getAttackPreview");
+  const resolveShoot = requireExport("resolveShoot");
+  const level = {
+    ...rules.LEVEL_DEFINITION,
+    covers: [
+      {
+        id: "test-cover",
+        cells: [{ column: 4, row: 3 }],
+      },
+    ],
+  };
+  const state = beginPlayerShot({
+    shooterId: "player-2",
+    targetId: "enemy-2",
+    shooterCell: { column: 2, row: 4 },
+    targetCell: { column: 5, row: 4 },
+    randomValues: [0.999],
+  });
+  const preview = getAttackPreview(state, "player-2", "enemy-2", { level });
+  const outcome = resolveShoot(state, {
+    shooterId: "player-2",
+    targetId: "enemy-2",
+    level,
+  });
+
+  assert.equal(preview.selectable, true);
+  assert.equal(preview.coverDefense.active, true);
+  assert.equal(preview.hitProbability, Number((preview.baseHitProbability - 0.2).toFixed(6)));
+  assert.deepEqual(outcome.preview, preview);
+  assert.equal(outcome.hit, false);
+  assert.equal(getUnit(outcome.state, "player-2").actionPoints, 2);
+});
+
+test("cover defense does not make blocked line of sight selectable", () => {
+  const getAttackPreview = requireExport("getAttackPreview");
+  const level = {
+    ...rules.LEVEL_DEFINITION,
+    covers: [
+      {
+        id: "blocking-cover",
+        cells: [{ column: 4, row: 4 }],
+      },
+    ],
+  };
+  const state = beginPlayerShot({
+    shooterId: "player-2",
+    targetId: "enemy-2",
+    shooterCell: { column: 2, row: 4 },
+    targetCell: { column: 5, row: 4 },
+  });
+  const preview = getAttackPreview(state, "player-2", "enemy-2", { level });
+
+  assert.equal(preview.blocked, true);
+  assert.equal(preview.selectable, false);
+  assert.equal(preview.hitProbability, 0);
+  assert.equal(preview.coverDefense.active, false);
+});
+
 test("friendly and defeated targets are invalid", () => {
   const getAttackPreview = requireExport("getAttackPreview");
   const resolveShoot = requireExport("resolveShoot");

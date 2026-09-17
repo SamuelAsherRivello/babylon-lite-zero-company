@@ -15,6 +15,7 @@ import { createPresentationDescriptors } from "./descriptors.js";
 import { cellToWorld, worldToCell } from "./rules/index.js";
 import {
   createCharacterTemplate,
+  createEnemyIntentPreviewController,
   createLitArena,
   createPresentationMaterials,
   createProjectedHudReporter,
@@ -186,6 +187,7 @@ export function createZeroCompanyScene(canvas, options = {}) {
   const feedback = createStaticFeedback(scene, descriptors, materials);
   const movementPreview = createMovementPreviewController(scene, materials);
   const overwatchPreview = createOverwatchPreviewController(scene, materials.overwatch);
+  const enemyIntentPreview = createEnemyIntentPreviewController(scene, materials);
   const camera = new ArcRotateCamera(
     "tactical-camera",
     descriptors.camera.alpha,
@@ -514,6 +516,12 @@ export function createZeroCompanyScene(canvas, options = {}) {
         overwatchPreview.setPreviews(previews);
       }
     },
+    setEnemyIntentPreview(intent) {
+      if (disposed) {
+        return { kind: "none", count: 0 };
+      }
+      return enemyIntentPreview.setIntent(intent);
+    },
     projectCell(cell) {
       const world = cellToWorld(cell);
       const renderWidth = Math.max(engine.getRenderWidth(), 1);
@@ -698,6 +706,7 @@ export function createZeroCompanyScene(canvas, options = {}) {
           ).length,
         ),
         reducedMotion,
+        enemyIntentPreview: enemyIntentPreview.getSnapshot(),
         events: presentationEvents.map((event) => ({ ...event })),
       };
     },
@@ -719,6 +728,7 @@ export function createZeroCompanyScene(canvas, options = {}) {
       cameraController.dispose();
       movementPreview.clear();
       overwatchPreview.clear();
+      enemyIntentPreview.clear();
       unitStateAnimator?.dispose();
       unitStateAnimator = null;
       removeHudReporter();

@@ -188,6 +188,112 @@ async function verifyOperationConfirmation(page) {
   assert.ok(cancel.y + cancel.height < actions[0].top);
 }
 
+async function verifyCoveredShotPreview(page) {
+  const coveredTarget = page.locator('.unit-hud[data-valid-target="true"][data-cover-defense="true"]').first();
+  await coveredTarget.waitFor();
+  const targetId = await coveredTarget.getAttribute("data-unit-id");
+  const previewText = await coveredTarget.locator(".attack-preview_cover").innerText();
+  assert.match(previewText, /Cover -20pp/);
+  assert.match(previewText, /\d+% \/ \d+ dmg/);
+
+  await page.waitForFunction((unitId) => {
+    const states = JSON.parse(document.querySelector("#game_canvas").dataset.unitPresentationStates ?? "[]");
+    const unit = states.find((candidate) => candidate.id === unitId);
+    return unit?.modelPosition?.[1] < -0.05 && unit?.modelScaling?.[1] < 0.98;
+  }, targetId);
+
+  const previewBox = await coveredTarget.locator(".attack-preview_cover").boundingBox();
+  const confirmation = await page.locator("#operation_confirmation").boundingBox().catch(() => null);
+  if (confirmation) {
+    const overlaps = !(
+      previewBox.x + previewBox.width < confirmation.x ||
+      confirmation.x + confirmation.width < previewBox.x ||
+      previewBox.y + previewBox.height < confirmation.y ||
+      confirmation.y + confirmation.height < previewBox.y
+    );
+    assert.equal(overlaps, false, "covered preview must not overlap confirmation controls");
+  }
+  const actionBar = await page.locator(".action-bar").boundingBox();
+  const overlapsActions = !(
+    previewBox.x + previewBox.width < actionBar.x ||
+    actionBar.x + actionBar.width < previewBox.x ||
+    previewBox.y + previewBox.height < actionBar.y ||
+    actionBar.y + actionBar.height < previewBox.y
+  );
+  assert.equal(overlapsActions, false, "covered preview must not overlap action controls");
+
+  return targetId;
+}
+
+async function verifyCoverPreviewScenario(browser, contextOptions) {
+  const context = await browser.newContext(contextOptions);
+  await blockExternalOrigins(context);
+  const page = await context.newPage();
+  const monitor = monitorPage(page);
+  const url = new URL(baseUrl);
+  url.searchParams.set("e2e-result", "cover");
+  await page.goto(url.href, { waitUntil: "networkidle" });
+  await waitForScene(page);
+  await page.getByRole("button", { name: /Shoot 1 AP/ }).click();
+  const targetId = await verifyCoveredShotPreview(page);
+  await page.locator(`[data-unit-id="${targetId}"]`).click();
+  await page.locator("#operation_confirmation").waitFor();
+  await verifyOperationConfirmation(page);
+  await verifyCoveredShotPreview(page);
+  assert.equal(
+    await page.locator("#game_canvas").getAttribute("data-selected-unit"),
+    "player-2",
+  );
+  const battleState = JSON.parse(await page.locator("#game_canvas").getAttribute("data-battle-state"));
+  assert.deepEqual(
+    battleState.units.find((unit) => unit.id === targetId).cell,
+    { column: 7, row: 3 },
+  );
+  assert.deepEqual(monitor.problems, []);
+  assert.deepEqual(monitor.externalRequests, []);
+  await context.close();
+}
+
+function assertIntentReadable(intent) {
+  assert.ok(intent.unitId, "enemy intent identifies a unit");
+  assert.ok(["move", "shoot", "overwatch", "relinquish"].includes(intent.action));
+  assert.equal(Number.isInteger(intent.cost), true);
+  if (intent.action === "move") {
+    assert.ok(intent.destination, "move intent includes a destination");
+    assert.ok(Array.isArray(intent.path), "move intent includes a path");
+    if (intent.followUp) {
+      assert.equal(intent.followUp.action, "shoot");
+      assert.ok(intent.followUp.targetId, "move follow-up identifies a target");
+      assert.ok(Number.isInteger(intent.followUp.preview?.maxDamage));
+    }
+  } else if (intent.action === "shoot") {
+    assert.ok(intent.targetId, "shoot intent includes a target");
+    assert.ok(intent.preview.hitProbability >= 0 && intent.preview.hitProbability <= 1);
+    assert.ok(Number.isInteger(intent.preview.maxDamage));
+  } else if (intent.action === "overwatch") {
+    assert.ok(intent.targetCell, "overwatch intent includes a target cell");
+    assert.ok(intent.range > 0);
+    assert.ok(intent.widthRatio > 0);
+  }
+}
+
+async function waitForEnemyIntent(page, predicate) {
+  await page.waitForFunction((source) => {
+    const canvas = document.querySelector("#game_canvas");
+    const intent = JSON.parse(canvas.dataset.enemyIntent ?? "null");
+    return intent && Function("intent", `return (${source})(intent);`)(intent);
+  }, predicate.toString(), { timeout: 12_000 });
+  const intent = JSON.parse(await page.locator("#game_canvas").getAttribute("data-enemy-intent"));
+  assertIntentReadable(intent);
+  const text = await page.locator("#game_canvas").getAttribute("data-enemy-intent-text");
+  assert.match(text, new RegExp(intent.action, "i"));
+  assert.notEqual(text, "null");
+  await page.waitForFunction(() => {
+    return document.querySelector("#game_canvas").dataset.enemyIntentPreviewKind !== undefined;
+  });
+  return intent;
+}
+
 async function verifyResultAndRestart(
   browser,
   scenario,
@@ -370,6 +476,32 @@ async function verifyPresentationFailureFallback(browser) {
   await context.close();
 }
 
+async function verifyEnemyIntentPreviewFailureFallback(browser) {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const page = await context.newPage();
+  const monitor = monitorPage(page);
+  const url = new URL(baseUrl);
+  url.searchParams.set("e2e-presentation-failure", "enemy-intent");
+  await page.goto(url.href, { waitUntil: "networkidle" });
+  await waitForScene(page);
+  await page.getByRole("button", { name: "End Turn" }).click();
+  await page.getByRole("button", { name: "Confirm?" }).click();
+  const intent = await waitForEnemyIntent(page, (candidate) => (
+    ["move", "shoot", "overwatch"].includes(candidate.action)
+  ));
+  assertIntentReadable(intent);
+  await page.locator('#game_canvas[data-enemy-intent-preview-fallback="true"]').waitFor();
+  assert.notEqual(await page.locator(".enemy-intent").innerText(), "");
+  await page.getByText("PLAYER TURN", { exact: true }).waitFor({ timeout: 12_000 });
+  assert.equal(
+    await page.locator("#game_canvas").getAttribute("data-enemy-intent"),
+    "null",
+  );
+  assert.deepEqual(monitor.problems, []);
+  assert.deepEqual(monitor.externalRequests, []);
+  await context.close();
+}
+
 async function verifyReducedMotionPresentation(browser) {
   const context = await browser.newContext({
     viewport: { width: 1280, height: 720 },
@@ -476,6 +608,13 @@ try {
   const desktopMonitor = monitorPage(desktop);
   await desktop.goto(baseUrl, { waitUntil: "networkidle" });
   await waitForScene(desktop);
+
+  const fullscreenBounds = await desktop.locator("#fullscreen_toggle").boundingBox();
+  const muteBounds = await desktop.locator("#mute_toggle").boundingBox();
+  assert.ok(
+    muteBounds.y >= fullscreenBounds.y + fullscreenBounds.height,
+    "Mute should appear below Fullscreen",
+  );
 
   const muteToggle = desktop.locator("#mute_toggle");
   assert.equal(await muteToggle.getAttribute("aria-pressed"), "false");
@@ -745,6 +884,14 @@ try {
   await desktop.waitForFunction(() => Boolean(document.querySelector("#game_canvas").dataset.lastWorldPick));
   await desktop.waitForFunction(() => document.querySelector("#game_canvas").dataset.overwatchPreview !== "null");
   await desktop.waitForFunction(() => document.querySelector("#game_canvas").dataset.renderedOverwatchTip !== "null");
+  const overwatchPreview = JSON.parse(
+    await desktop.locator("#game_canvas").getAttribute("data-overwatch-preview"),
+  );
+  assert.equal(overwatchPreview.widthRatio, 0.45);
+  assert.ok(
+    Math.abs(Math.tan(overwatchPreview.halfAngle) * 2 - 0.45) < 1e-12,
+    "three-AP Overwatch preview should render at 45% full width",
+  );
   const coneOrigin = JSON.parse(await desktop.locator("#game_canvas").getAttribute("data-overwatch-origin-point"));
   const coneTarget = JSON.parse(await desktop.locator("#game_canvas").getAttribute("data-overwatch-target-point"));
   const coneTip = JSON.parse(await desktop.locator("#game_canvas").getAttribute("data-rendered-overwatch-tip"));
@@ -808,6 +955,19 @@ try {
   await desktop.getByRole("button", { name: "Confirm?" }).click();
   await desktop.getByText("ENEMY TURN", { exact: true }).waitFor();
   await desktop.locator('.unit-hud_active[data-unit-id="enemy-1"]').waitFor();
+  const firstEnemyIntent = await waitForEnemyIntent(desktop, (intent) => (
+    ["move", "shoot", "overwatch"].includes(intent.action)
+  ));
+  const firstPreviewKind = await desktop.locator("#game_canvas").getAttribute("data-enemy-intent-preview-kind");
+  const firstPreviewCount = Number(
+    await desktop.locator("#game_canvas").getAttribute("data-enemy-intent-preview-count"),
+  );
+  assert.equal(firstPreviewKind, firstEnemyIntent.action);
+  assert.ok(firstPreviewCount >= 0);
+  const firstPreviewMeshes = JSON.parse(
+    await desktop.locator("#game_canvas").getAttribute("data-enemy-intent-preview-meshes"),
+  );
+  assert.ok(firstPreviewMeshes.every((mesh) => mesh.pickable === false));
   assert.equal(await desktop.locator(".action-button:enabled").count(), 0);
   await selectUnit(desktop, "player-1");
   await desktop.getByText("Vanguard", { exact: true }).waitFor();
@@ -835,6 +995,13 @@ try {
   );
   assert.ok(
     enemyIntentHistory.some((intent) => ["move", "shoot", "overwatch"].includes(intent.action)),
+  );
+  for (const intent of enemyIntentHistory) {
+    assertIntentReadable(intent);
+  }
+  assert.ok(
+    enemyIntentHistory.some((intent) => intent.action === "move" && intent.followUp?.action === "shoot"),
+    "enemy intent history should cover move-then-shoot readability",
   );
   const refreshedBattle = JSON.parse(
     await desktop.locator("#game_canvas").getAttribute("data-battle-state"),
@@ -1030,6 +1197,20 @@ try {
     return state.units.find((unit) => unit.id === "player-3").overwatch?.shotsRemaining === 3;
   });
 
+  await mobile.getByRole("button", { name: "End Turn" }).tap();
+  await mobile.locator("#operation_confirmation").waitFor();
+  await mobile.getByRole("button", { name: "Confirm?" }).tap();
+  const mobileEnemyIntent = await waitForEnemyIntent(mobile, (intent) => (
+    ["move", "shoot", "overwatch"].includes(intent.action)
+  ));
+  assertIntentReadable(mobileEnemyIntent);
+  const mobileIntentBox = await mobile.locator(".enemy-intent").boundingBox();
+  mobileFrame = await mobile.locator("#content_layer").boundingBox();
+  assert.ok(mobileIntentBox.x >= mobileFrame.x);
+  assert.ok(mobileIntentBox.x + mobileIntentBox.width <= mobileFrame.x + mobileFrame.width);
+  assert.ok(mobileIntentBox.y >= mobileFrame.y);
+  assert.ok(mobileIntentBox.y + mobileIntentBox.height <= mobileFrame.y + mobileFrame.height);
+
   const beforeTouch = await cameraState(mobile);
   await mobile.locator("#game_canvas").evaluate((canvas) => {
     const bounds = canvas.getBoundingClientRect();
@@ -1071,8 +1252,16 @@ try {
     hasTouch: true,
     deviceScaleFactor: 1,
   });
+  await verifyCoverPreviewScenario(browser, { viewport: { width: 1600, height: 900 } });
+  await verifyCoverPreviewScenario(browser, {
+    viewport: { width: 844, height: 390 },
+    isMobile: true,
+    hasTouch: true,
+    deviceScaleFactor: 1,
+  });
   await verifyBlockedAudioFallback(browser);
   await verifyPresentationFailureFallback(browser);
+  await verifyEnemyIntentPreviewFailureFallback(browser);
   await verifyReducedMotionPresentation(browser);
   await verifyReactionPresentation(browser);
 

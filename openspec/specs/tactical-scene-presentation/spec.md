@@ -32,8 +32,11 @@ the primary visual distinction.
 The application SHALL show a player-turn banner, Move, Shoot, Overwatch, and
 End Turn controls, selection rings, health indicators, action-point
 indicators, Overwatch state indicators, movement-cell highlighting, a shot
-tracer with impact or muzzle feedback, and an aimed Overwatch cone. These
-elements SHALL remain presentation-only in this milestone.
+tracer with impact or muzzle feedback, and an aimed Overwatch cone. During the
+enemy turn, it SHALL also present the active enemy's declared intent with
+action-specific preview geometry: planned path and destination for Move, target
+line for Shoot, and cone area for Overwatch. These elements SHALL remain
+presentation-only in this milestone.
 
 #### Scenario: Complete interface is visible
 
@@ -45,6 +48,12 @@ elements SHALL remain presentation-only in this milestone.
 
 - **WHEN** the user presses Move, Shoot, Overwatch, or End Turn
 - **THEN** no unit moves, attacks, enters Overwatch, spends AP, or changes turn
+
+#### Scenario: Enemy intent preview is visible
+
+- **WHEN** an enemy declares Move, Shoot, or Overwatch intent
+- **THEN** the active enemy, intended action, AP cost, and relevant preview
+  geometry are visible inside the framed battle view before resolution
 
 ### Requirement: Player operatives have anchored in-world status HUDs
 
@@ -58,13 +67,56 @@ associated with its operative as the camera orbits, zooms, or changes focus.
 - **THEN** every player HUD remains aligned with its corresponding operative
   and stays legible without drifting onto another unit
 
+### Requirement: Cover defense is visible in combat previews
+
+When a selected attack target receives cover defense, the interface SHALL show
+that cover is reducing hit probability before the attack is confirmed. The
+cover indicator SHALL fit inside the existing 16:9 game frame and SHALL NOT
+obscure unit health, AP, Overwatch state, or action-confirmation controls.
+
+#### Scenario: Player previews a covered shot
+
+- **WHEN** the player targets a visible enemy with active cover defense
+- **THEN** the combat preview identifies the cover modifier and displays the
+  reduced hit probability before confirmation
+
+#### Scenario: Cover indicator fits the game frame
+
+- **WHEN** cover-defense preview UI is visible on supported desktop or mobile
+  landscape viewports
+- **THEN** it remains inside the framed surface without overlapping essential
+  HUD or action controls
+
+### Requirement: Cover defense changes character pose
+
+When a living unit currently has active cover defense, its character
+presentation SHALL visibly lower into an in-cover pose such as a restrained
+squat or brace. The in-cover pose SHALL be programmatic, SHALL NOT require a
+new model or authored animation asset, and SHALL NOT change the unit's grid
+cell, collider, selection target, health, AP, Overwatch state, or combat
+resolution.
+
+#### Scenario: Covered unit lowers into cover
+
+- **WHEN** a living unit has active cover defense
+- **THEN** its character presentation appears visibly lower than its normal
+  idle stance while remaining selected and targetable in its original cell
+
+#### Scenario: Cover pose clears when not defended
+
+- **WHEN** the unit no longer has active cover defense because it moved away
+  from cover, became flanked, died, or the attack preview cleared
+- **THEN** the in-cover pose clears without changing gameplay state
+
 ### Requirement: The game surface preserves a responsive 16:9 frame
 
 The playable surface SHALL remain centered at a 16:9 aspect ratio, grow as
 tall as the available viewport permits without exceeding its width, and use a
 dark background for any space outside the frame. Interface text and controls
 SHALL remain inside the frame without overlap at supported desktop and mobile
-landscape sizes.
+landscape sizes. Enemy intent banners and preview overlays SHALL remain inside
+the same responsive frame and SHALL NOT obscure essential unit HUD values or
+action resolution feedback.
 
 #### Scenario: Wide desktop requires side bars
 
@@ -77,6 +129,13 @@ landscape sizes.
 - **WHEN** the browser viewport is narrower than 16:9
 - **THEN** the game fits the available width and dark letterboxing occupies
   the remaining vertical space
+
+#### Scenario: Enemy intent fits supported viewports
+
+- **WHEN** enemy intent is visible on supported desktop or mobile landscape
+  viewports
+- **THEN** the intent text and preview overlays stay within the framed surface
+  without overlapping essential HUD, result, or action-feedback content
 
 ### Requirement: Pending operations use aligned inline confirmation controls
 

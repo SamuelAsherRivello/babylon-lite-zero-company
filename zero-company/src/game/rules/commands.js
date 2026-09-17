@@ -392,6 +392,7 @@ function confirmOverwatch(state, command) {
         targetCell: { ...commitment.targetCell },
         direction: { ...commitment.direction },
         range: commitment.range,
+        widthRatio: commitment.widthRatio,
         halfAngle: commitment.halfAngle,
       }),
     ],

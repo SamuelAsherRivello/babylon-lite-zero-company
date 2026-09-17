@@ -1,11 +1,4 @@
-# Enemy Tactical AI Specification
-
-## Purpose
-
-Define a transparent, bounded enemy decision policy that spends each enemy's
-activation on legal tactical actions without accepting player commands.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Enemy decisions use the same action rules as player decisions
 
@@ -63,53 +56,3 @@ choices before attack randomness.
   damage and a player approach lane can be covered
 - **THEN** the enemy may commit all remaining AP to Overwatch aimed toward that
   lane
-
-### Requirement: Each enemy completes a finite activation
-
-The AI SHALL either spend AP on a legal action or explicitly relinquish the
-remainder when no useful legal action exists. It SHALL cap planning work and
-complete each activation without an infinite decision or animation loop.
-
-#### Scenario: No useful action exists
-
-- **WHEN** an active enemy has AP but no legal action with positive tactical
-  utility
-- **THEN** it relinquishes the remaining AP and allows the turn sequence to
-  continue
-
-### Requirement: Enemy intent and resolution are observable
-
-The active enemy SHALL be visually identified, and each chosen action SHALL be
-announced or previewed long enough for the player to follow its target and AP
-cost before or during resolution. The intent SHALL expose the chosen action's
-relevant deterministic plan details, including destination and path for Move,
-target plus hit and damage preview for Shoot, and target cell plus cone
-geometry for Overwatch. The preview SHALL be derived from the selected plan and
-SHALL NOT consume random results, alter the chosen action, or permit player
-commands to change enemy resolution. The player SHALL retain camera inspection
-without gaining control over the enemy action.
-
-#### Scenario: Enemy performs an action
-
-- **WHEN** the active enemy commits to Move, Shoot, or Overwatch
-- **THEN** the interface identifies the active enemy and chosen action while
-  preventing player commands from altering the resolution
-
-#### Scenario: Enemy move intent is declared
-
-- **WHEN** an enemy selects a Move plan
-- **THEN** the observable intent identifies the enemy, AP cost, destination, and
-  planned path before the move resolves
-
-#### Scenario: Enemy shot intent is declared
-
-- **WHEN** an enemy selects a Shoot plan
-- **THEN** the observable intent identifies the enemy, target, AP cost, hit
-  probability, and maximum damage before the shot resolves without consuming
-  the shot's random result
-
-#### Scenario: Enemy Overwatch intent is declared
-
-- **WHEN** an enemy selects an Overwatch plan
-- **THEN** the observable intent identifies the enemy, AP cost, target cell,
-  range, and cone width before Overwatch is committed

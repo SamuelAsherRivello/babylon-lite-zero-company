@@ -3,7 +3,9 @@ import { isCellInBounds, LEVEL_DEFINITION } from "./level.js";
 import { getReachableDestinations } from "./movement.js";
 import {
   createOverwatchCommitment,
+  getOverwatchConeWidthRatio,
   getOverwatchDirection,
+  getOverwatchHalfAngle,
   OVERWATCH_PROFILE,
 } from "./overwatch.js";
 import { getUnit } from "./selectors.js";
@@ -23,6 +25,25 @@ const ACTION_ORDER = Object.freeze({
 
 function cloneCell(cell) {
   return { column: cell.column, row: cell.row };
+}
+
+function clonePath(path = []) {
+  return path.map(cloneCell);
+}
+
+function findUnitCell(state, unitId) {
+  const cell = state?.units?.find((unit) => unit.id === unitId)?.cell;
+  return cell ? cloneCell(cell) : null;
+}
+
+function createShotIntentPreview(preview) {
+  return preview
+    ? {
+        hitProbability: preview.hitProbability,
+        maxDamage: preview.maxDamage,
+        apCost: preview.apCost,
+      }
+    : null;
 }
 
 function expectedDamage(preview) {
@@ -125,7 +146,8 @@ function createOverwatchPlan(unit, target) {
     targetCell: cloneCell(targetCell),
     direction: { ...direction },
     range: OVERWATCH_PROFILE.range,
-    halfAngle: OVERWATCH_PROFILE.halfAngle,
+    widthRatio: getOverwatchConeWidthRatio(unit.actionPoints),
+    halfAngle: getOverwatchHalfAngle(unit.actionPoints),
     cost: unit.actionPoints,
   };
   return {
@@ -267,6 +289,67 @@ export function chooseEnemyPlan(
   };
 }
 
+export function createEnemyIntentViewModel(plan, state = null) {
+  if (!plan?.unitId || !plan.action) {
+    return null;
+  }
+
+  const base = {
+    unitId: plan.unitId,
+    action: plan.action,
+    cost: plan.cost ?? 0,
+    totalCost: plan.totalCost ?? plan.cost ?? 0,
+    targetId: plan.targetId ?? null,
+    originCell: findUnitCell(state, plan.unitId),
+    sequence: Array.isArray(plan.sequence)
+      ? plan.sequence.map((step) => step.action)
+      : [],
+  };
+
+  if (plan.action === ACTIONS.SHOOT) {
+    return {
+      ...base,
+      targetCell: findUnitCell(state, plan.targetId),
+      preview: createShotIntentPreview(plan.preview),
+    };
+  }
+
+  if (plan.action === ACTIONS.MOVE) {
+    const followUp = plan.followUp
+      ? {
+          action: plan.followUp.action,
+          targetId: plan.followUp.targetId ?? null,
+          targetCell: findUnitCell(state, plan.followUp.targetId),
+          cost: plan.followUp.cost ?? 0,
+          preview: createShotIntentPreview(plan.followUp.preview),
+        }
+      : null;
+
+    return {
+      ...base,
+      destination: plan.destination ? cloneCell(plan.destination) : null,
+      path: clonePath(plan.path),
+      followUp,
+    };
+  }
+
+  if (plan.action === ACTIONS.OVERWATCH) {
+    return {
+      ...base,
+      targetCell: plan.targetCell ? cloneCell(plan.targetCell) : null,
+      direction: plan.direction ? { ...plan.direction } : null,
+      range: plan.range ?? OVERWATCH_PROFILE.range,
+      widthRatio: plan.widthRatio ?? null,
+      halfAngle: plan.halfAngle ?? null,
+    };
+  }
+
+  return {
+    ...base,
+    reason: plan.reason ?? null,
+  };
+}
+
 function rejectEnemyOverwatch(state, plan, reason) {
   return {
     accepted: false,
@@ -388,6 +471,7 @@ export function resolveEnemyOverwatch(
     targetCell: cloneCell(commitment.targetCell),
     direction: { ...commitment.direction },
     range: commitment.range,
+    widthRatio: commitment.widthRatio,
     halfAngle: commitment.halfAngle,
   };
 

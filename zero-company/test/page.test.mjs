@@ -91,9 +91,19 @@ test("renders the live tactical interface", async () => {
   assert.match(app, /id="operation_confirmation"/);
   assert.match(app, />\s*Confirm\?\s*<\/button>/);
   assert.match(app, />\s*Cancel\s*<\/button>/);
+  assert.match(app, /formatEnemyIntent/);
+  assert.match(app, /dataset\.enemyIntentPreviewKind/);
+  assert.match(app, /dataset\.enemyIntentPreviewFallback/);
+  assert.match(app, /aria-label=\{enemyIntentText\}/);
+  assert.match(app, /coverDefenseUnitIds/);
+  assert.match(app, /data-cover-defense=\{hasCoverDefense \? "true" : "false"\}/);
+  assert.match(app, /Cover -20pp/);
+  assert.match(app, /coverDefense: defendedUnits\.has\(unit\.id\)/);
   assert.match(styles, /--action-column-width: 78px/);
   assert.match(styles, /grid-template-columns: repeat\(4, var\(--action-column-width\)\)/);
   assert.match(styles, /\.operation-confirmation \{[\s\S]*?grid-template-columns: repeat\(2, 1fr\)/);
+  assert.match(styles, /\.enemy-intent \{[\s\S]*?max-width: min\(540px, 68%\)/);
+  assert.match(styles, /\.attack-preview_cover \{[\s\S]*?background: #68d391/);
 });
 
 test("keeps every unit inspectable across phases and terminal state", () => {

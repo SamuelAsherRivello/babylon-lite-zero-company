@@ -10,7 +10,7 @@ Overwatch, sequential enemy AI, victory or defeat, and in-memory Restart. The
 restrained greybox presentation uses local models and sounds, programmatic
 character feedback, and focus-based camera controls.
 
-Current version: `v0.0.4`
+Current version: `v0.0.5`
 
 ## Images
 

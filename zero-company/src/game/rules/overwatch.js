@@ -1,11 +1,12 @@
-import { BATTLE_PHASES, TEAMS } from "./contracts.js";
+import { BATTLE_PHASES, MAX_ACTION_POINTS, TEAMS } from "./contracts.js";
 import { applyTerminalResult } from "./battleResult.js";
 import { queryAttack, resolveAttack } from "./combat.js";
 import { LEVEL_DEFINITION } from "./level.js";
 
 export const OVERWATCH_PROFILE = Object.freeze({
   range: 6,
-  halfAngle: Math.PI / 4,
+  baseWidthRatio: 0.2,
+  maximumWidthRatio: 0.45,
 });
 
 const EPSILON = 1e-9;
@@ -16,6 +17,24 @@ function cloneCell(cell) {
 
 function normalizeComponent(value) {
   return Object.is(value, -0) ? 0 : value;
+}
+
+export function getOverwatchConeWidthRatio(actionPoints) {
+  const wholeActionPoints = Number.isFinite(actionPoints)
+    ? Math.trunc(actionPoints)
+    : 1;
+  const clampedActionPoints = Math.min(
+    MAX_ACTION_POINTS,
+    Math.max(1, wholeActionPoints),
+  );
+  const progress = (clampedActionPoints - 1) / (MAX_ACTION_POINTS - 1);
+  return OVERWATCH_PROFILE.baseWidthRatio +
+    (OVERWATCH_PROFILE.maximumWidthRatio - OVERWATCH_PROFILE.baseWidthRatio) *
+      progress;
+}
+
+export function getOverwatchHalfAngle(actionPoints) {
+  return Math.atan(getOverwatchConeWidthRatio(actionPoints) / 2);
 }
 
 export function getOverwatchDirection(originCell, targetCell) {
@@ -35,6 +54,7 @@ export function getOverwatchDirection(originCell, targetCell) {
 
 export function createOverwatchCommitment(unit, pendingAction) {
   const committedActionPoints = unit.actionPoints;
+  const widthRatio = getOverwatchConeWidthRatio(committedActionPoints);
 
   return {
     ownerId: unit.id,
@@ -42,7 +62,8 @@ export function createOverwatchCommitment(unit, pendingAction) {
     targetCell: cloneCell(pendingAction.targetCell),
     direction: { ...pendingAction.direction },
     range: OVERWATCH_PROFILE.range,
-    halfAngle: OVERWATCH_PROFILE.halfAngle,
+    widthRatio,
+    halfAngle: getOverwatchHalfAngle(committedActionPoints),
     committedActionPoints,
     shotsRemaining: committedActionPoints,
   };

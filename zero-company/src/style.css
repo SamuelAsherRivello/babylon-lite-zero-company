@@ -117,6 +117,12 @@ a {
   background: rgb(17 23 29 / 82%);
 }
 
+#settings {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
 .settings_option {
   appearance: none;
   display: inline-flex;
@@ -162,6 +168,7 @@ a {
   z-index: 15;
   top: calc(var(--ui-margin-y, 20px) + 42px);
   left: 50%;
+  max-width: min(540px, 68%);
   padding: 5px 10px;
   transform: translateX(-50%);
   border: 1px solid #98565a;
@@ -170,7 +177,11 @@ a {
   background: rgb(54 22 25 / 90%);
   font-size: 11px;
   font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
   text-transform: uppercase;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
 }
 
 .inspection-panel {
@@ -312,6 +323,11 @@ a {
 .attack-preview_blocked {
   color: #eef2f5;
   background: #303940;
+}
+
+.attack-preview_cover {
+  color: #061310;
+  background: #68d391;
 }
 
 .unit-health {
@@ -599,6 +615,7 @@ a {
 
   .enemy-intent {
     top: calc(var(--ui-margin-y, 20px) + 32px);
+    max-width: 54%;
     padding: 4px 8px;
     font-size: 9px;
   }
