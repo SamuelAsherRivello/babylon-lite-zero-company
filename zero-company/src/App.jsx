@@ -41,13 +41,26 @@ function createRuntimeBattle() {
   }
 
   const scenario = new URLSearchParams(window.location.search).get("e2e-result");
-  if (scenario !== "victory" && scenario !== "defeat") {
+  if (scenario !== "victory" && scenario !== "defeat" && scenario !== "reaction") {
     return createInitialBattle();
   }
 
   const state = createInitialBattle({
     randomSource: createScriptedRandom([0, 0, 0, 0]),
   });
+  if (scenario === "reaction") {
+    let reactionState = state;
+    for (const command of [
+      { type: "BEGIN_ACTION", unitId: "player-1", action: "overwatch" },
+      { type: "AIM_OVERWATCH", unitId: "player-1", targetCell: { column: 2, row: 6 } },
+      { type: "CONFIRM_OVERWATCH", unitId: "player-1" },
+      { type: "REQUEST_END_TURN" },
+      { type: "CONFIRM_END_TURN" },
+    ]) {
+      reactionState = dispatchBattleCommand(reactionState, command).state;
+    }
+    return reactionState;
+  }
   return {
     ...state,
     units: state.units.map((unit) => {
@@ -81,6 +94,14 @@ const actionControls = [
   { id: "overwatch", label: "Overwatch", Icon: Eye },
   { id: "end-turn", label: "End Turn", Icon: SkipForward },
 ];
+
+const overwatchAimCells = Object.freeze([
+  { column: 0, row: 0 },
+  { column: 0, row: 7 },
+  { column: 6, row: 7 },
+  { column: 12, row: 7 },
+  { column: 3, row: 0 },
+]);
 
 const weaponLabels = Object.freeze({
   short: "Scattergun",
@@ -125,6 +146,7 @@ function GameScene({
   battle,
   committedOverwatchPreviews,
   enemyIntent,
+  failNextPresentation,
   inputEnabled,
   movePresentation,
   movementDestinations,
@@ -134,6 +156,7 @@ function GameScene({
   onMoveStep,
   onPresentationSettled,
   onProjectedHudPositions,
+  onReactionFeedback,
   onSelectionChange,
   onShotComplete,
   overwatchPreview,
@@ -142,10 +165,13 @@ function GameScene({
 }) {
   const canvasRef = useRef(null);
   const gameRef = useRef(null);
+  const movementDestinationsRef = useRef(movementDestinations);
+  movementDestinationsRef.current = movementDestinations;
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const game = createZeroCompanyScene(canvasRef.current, {
+      failNextPresentation,
       onLoadingChange: (state) => {
         canvas.dataset.sceneStatus = state.status;
         onLoadingChange(state);
@@ -155,6 +181,9 @@ function GameScene({
         canvas.dataset.unitCount = String(descriptors.units.length);
         canvas.dataset.coverCount = String(descriptors.covers.length);
         canvas.dataset.presentationMeshCount = String(scene.meshes.length);
+        canvas.dataset.reducedMotion = String(
+          gameRef.current?.getPresentationSnapshot().reducedMotion ?? false,
+        );
       },
       onProjectedHudPositions,
       onCellSelect,
@@ -167,6 +196,25 @@ function GameScene({
       },
       onCameraChange: (cameraState) => {
         canvas.dataset.cameraState = JSON.stringify(cameraState);
+        window.requestAnimationFrame(() => {
+          const currentGame = gameRef.current;
+          if (currentGame) {
+            canvas.dataset.movementDestinations = JSON.stringify(
+              movementDestinationsRef.current.map((destination) => ({
+                ...destination.cell,
+                cost: destination.minimumActionPoints,
+                steps: destination.steps,
+                ...currentGame.projectCell(destination.cell),
+              })),
+            );
+            canvas.dataset.overwatchAimPoints = JSON.stringify(
+              overwatchAimCells.map((cell) => ({
+                ...cell,
+                ...currentGame.projectCell(cell),
+              })),
+            );
+          }
+        });
       },
     });
     gameRef.current = game;
@@ -175,7 +223,7 @@ function GameScene({
       game.dispose();
       gameRef.current = null;
     };
-  }, [onCellSelect, onLoadingChange, onProjectedHudPositions, onSelectionChange]);
+  }, [failNextPresentation, onCellSelect, onLoadingChange, onProjectedHudPositions, onSelectionChange]);
 
   useEffect(() => {
     gameRef.current?.setInputEnabled(inputEnabled);
@@ -270,13 +318,7 @@ function GameScene({
         return;
       }
       canvasRef.current.dataset.overwatchAimPoints = JSON.stringify(
-        [
-          { column: 0, row: 0 },
-          { column: 0, row: 7 },
-          { column: 6, row: 7 },
-          { column: 12, row: 7 },
-          { column: 3, row: 0 },
-        ].map((cell) => ({ ...cell, ...game.projectCell(cell) })),
+        overwatchAimCells.map((cell) => ({ ...cell, ...game.projectCell(cell) })),
       );
       canvasRef.current.dataset.renderedOverwatchTip = JSON.stringify(
         game.projectOverwatchTip(),
@@ -318,16 +360,37 @@ function GameScene({
           }
           onMoveStep(movePresentation.unitId, cell);
         },
+        movePresentation.reactions ?? [],
+        (reaction) => {
+          if (canvasRef.current) {
+            const history = JSON.parse(
+              canvasRef.current.dataset.reactionFeedbackHistory ?? "[]",
+            );
+            history.push(reaction);
+            canvasRef.current.dataset.reactionFeedbackHistory = JSON.stringify(history);
+          }
+          onReactionFeedback(reaction);
+        },
       ))
-      .then(() => {
+      .catch(() => {
+        if (canvasRef.current) {
+          canvasRef.current.dataset.presentationFallback = "move";
+        }
+      })
+      .finally(() => {
         if (active) {
+          if (canvasRef.current) {
+            canvasRef.current.dataset.presentationEvents = JSON.stringify(
+              game.getPresentationSnapshot().events,
+            );
+          }
           onMoveComplete(movePresentation.finalState);
         }
       });
     return () => {
       active = false;
     };
-  }, [movePresentation, onMoveComplete, onMoveStep]);
+  }, [movePresentation, onMoveComplete, onMoveStep, onReactionFeedback]);
 
   useEffect(() => {
     const game = gameRef.current;
@@ -358,10 +421,18 @@ function GameScene({
         }
         return playback;
       })
-      .then(() => {
+      .catch(() => {
+        if (canvasRef.current) {
+          canvasRef.current.dataset.presentationFallback = "shot";
+        }
+      })
+      .finally(() => {
         if (active) {
           if (canvasRef.current) {
             canvasRef.current.dataset.shotStatus = "complete";
+            canvasRef.current.dataset.presentationEvents = JSON.stringify(
+              game.getPresentationSnapshot().events,
+            );
           }
           onShotComplete(shotPresentation.finalState);
         }
@@ -399,7 +470,7 @@ function GameScene({
   );
 }
 
-function UnitHud({ active, attackPreview, selected, unit }) {
+function UnitHud({ active, attackPreview, onSelect, selected, unit }) {
   if (!unit.visible) {
     return null;
   }
@@ -407,11 +478,15 @@ function UnitHud({ active, attackPreview, selected, unit }) {
   const isPlayer = unit.team === "player";
 
   return (
-    <div
+    <button
+      type="button"
       className={`unit-hud unit-hud_${unit.team}${active ? " unit-hud_active" : ""}${selected ? " unit-hud_selected" : ""}`}
+      aria-label={`Inspect ${unit.label}`}
+      aria-pressed={selected}
       data-unit-id={unit.id}
       data-unit-status={unit.status}
       data-valid-target={attackPreview?.selectable ? "true" : "false"}
+      onClick={() => onSelect(unit.id)}
       style={{ left: `${unit.x}px`, top: `${unit.y}px` }}
     >
       <div className="unit-health" aria-label={`${unit.health} health`}>
@@ -440,7 +515,7 @@ function UnitHud({ active, attackPreview, selected, unit }) {
             : `${Math.round(attackPreview.hitProbability * 100)}% / ${attackPreview.maxDamage} dmg`}
         </div>
       ) : null}
-    </div>
+    </button>
   );
 }
 
@@ -492,6 +567,12 @@ export function App() {
   const [hudPositions, setHudPositions] = useState([]);
   const [selectedUnitId, setSelectedUnitId] = useState(() => battle.selectedUnitId);
   const portraitBlocked = usePortraitBlocker();
+  const e2eScenario = import.meta.env.DEV
+    ? new URLSearchParams(window.location.search).get("e2e-result")
+    : null;
+  const failNextPresentation = import.meta.env.DEV
+    ? new URLSearchParams(window.location.search).get("e2e-presentation-failure")
+    : null;
   const versionNumber = versionText.trim().replace(/^version=/, "").replace(/^v/, "");
   const contentLayer = document.getElementById("content_layer");
 
@@ -538,6 +619,17 @@ export function App() {
     const current = battleRef.current;
     if (presentationBusyRef.current) {
       setSelectedUnitId(unit.id);
+      return;
+    }
+    if (current.pendingAction?.action === "overwatch") {
+      const aimed = dispatchBattleCommand(current, {
+        type: "AIM_OVERWATCH",
+        unitId: current.pendingAction.unitId,
+        targetCell: unit.cell,
+      });
+      if (aimed.accepted) {
+        setBattle(aimed.state);
+      }
       return;
     }
     if (current.pendingAction?.action === "shoot") {
@@ -684,6 +776,7 @@ export function App() {
       setMovePresentation({
         unitId: current.pendingAction.unitId,
         path: outcome.path,
+        reactions: outcome.reactions,
         finalState: outcome.state,
       });
     }
@@ -715,6 +808,13 @@ export function App() {
     setPresentationBusy(false);
   }, []);
 
+  const handleReactionFeedback = useCallback((reaction) => {
+    playSound("shot");
+    if (reaction.hit) {
+      window.setTimeout(() => playSound("impact"), 120);
+    }
+  }, [playSound]);
+
   const handlePresentationSettled = useCallback(() => {
     setPresentationBusy(false);
   }, []);
@@ -730,7 +830,19 @@ export function App() {
       return undefined;
     }
 
-    const plan = chooseEnemyPlan(battle) ?? {
+    const activeEnemy = battle.units.find((unit) => unit.id === battle.activeUnitId);
+    const forcedReactionMove = e2eScenario === "reaction" &&
+      activeEnemy?.id === "enemy-1" &&
+      activeEnemy.cell.column === 2 &&
+      activeEnemy.cell.row === 6;
+    const plan = (forcedReactionMove
+      ? {
+          unitId: "enemy-1",
+          action: "move",
+          cost: 1,
+          destination: { column: 2, row: 5 },
+        }
+      : chooseEnemyPlan(battle)) ?? {
       unitId: battle.activeUnitId,
       action: "relinquish",
       cost: 0,
@@ -773,6 +885,7 @@ export function App() {
           setMovePresentation({
             unitId: plan.unitId,
             path: outcome.path,
+            reactions: outcome.reactions,
             finalState: outcome.state,
           });
           return;
@@ -821,7 +934,7 @@ export function App() {
     }, 520);
 
     return () => window.clearTimeout(timeout);
-  }, [battle, loadState.status, playSound, presentationBusy]);
+  }, [battle, e2eScenario, loadState.status, playSound, presentationBusy]);
 
   const scenePortal = useMemo(() => {
     if (!contentLayer) {
@@ -833,6 +946,7 @@ export function App() {
         battle={battle}
         committedOverwatchPreviews={committedOverwatchPreviews}
         enemyIntent={enemyIntent}
+        failNextPresentation={failNextPresentation}
         inputEnabled={!portraitBlocked}
         movePresentation={movePresentation}
         movementDestinations={movementDestinations}
@@ -842,6 +956,7 @@ export function App() {
         onMoveStep={handleMoveStep}
         onPresentationSettled={handlePresentationSettled}
         onProjectedHudPositions={handleHudPositions}
+        onReactionFeedback={handleReactionFeedback}
         onSelectionChange={handleSelectionChange}
         onShotComplete={handleShotComplete}
         overwatchPreview={overwatchPreview}
@@ -850,7 +965,7 @@ export function App() {
       />,
       contentLayer,
     );
-  }, [battle, committedOverwatchPreviews, contentLayer, enemyIntent, handleCellSelect, handleHudPositions, handleLoadingChange, handleMoveComplete, handleMoveStep, handlePresentationSettled, handleSelectionChange, handleShotComplete, movePresentation, movementDestinations, overwatchPreview, portraitBlocked, selectedUnitId, shotPresentation]);
+  }, [battle, committedOverwatchPreviews, contentLayer, enemyIntent, failNextPresentation, handleCellSelect, handleHudPositions, handleLoadingChange, handleMoveComplete, handleMoveStep, handlePresentationSettled, handleReactionFeedback, handleSelectionChange, handleShotComplete, movePresentation, movementDestinations, overwatchPreview, portraitBlocked, selectedUnitId, shotPresentation]);
 
   useEffect(() => {
     const uiLayer = document.getElementById("ui_layer");
@@ -938,6 +1053,7 @@ export function App() {
                 key={projectedUnit.id}
                 active={battle.activeUnitId === projectedUnit.id}
                 attackPreview={attackPreviews.get(projectedUnit.id)}
+                onSelect={(unitId) => handleSelectionChange(battleUnits.get(unitId))}
                 selected={selectedUnitId === projectedUnit.id}
                 unit={{
                   ...projectedUnit,
@@ -968,6 +1084,7 @@ export function App() {
                 type="button"
                 className={`action-button${active ? " action-button_active" : ""}`}
                 aria-disabled={!enabled}
+                aria-pressed={active}
                 disabled={!enabled}
                 data-action={id}
                 title={enabled ? displayLabel : `${displayLabel} unavailable`}

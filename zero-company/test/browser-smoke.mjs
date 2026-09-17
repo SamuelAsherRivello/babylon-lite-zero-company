@@ -33,6 +33,17 @@ function monitorPage(page) {
   return { problems, externalRequests, audioRequests };
 }
 
+async function blockExternalOrigins(context) {
+  const allowedOrigin = new URL(baseUrl).origin;
+  await context.route("**/*", (route) => {
+    const requestUrl = new URL(route.request().url());
+    if (requestUrl.protocol === "data:" || requestUrl.origin === allowedOrigin) {
+      return route.continue();
+    }
+    return route.abort("blockedbyclient");
+  });
+}
+
 async function waitForScene(page) {
   await page.locator('#game_canvas[data-scene-status="ready"]').waitFor({ timeout: 20_000 });
   await page.locator(".scene-state").waitFor({ state: "detached", timeout: 5_000 });
@@ -91,29 +102,77 @@ async function canvasPixelStats(page) {
   });
 }
 
-async function unitScreenPoint(page, unitId) {
-  const frame = await page.locator("#content_layer").boundingBox();
+async function selectUnit(page, unitId) {
+  await page.locator(`[data-unit-id="${unitId}"]`).click();
+  await page.waitForFunction((expectedUnitId) => {
+    return document.querySelector("#game_canvas").dataset.selectedUnit === expectedUnitId;
+  }, unitId);
+}
+
+async function focusUnitOnCanvas(page, unitId) {
   const projected = await page.locator(`[data-unit-id="${unitId}"]`).evaluate((element) => ({
     x: Number.parseFloat(element.style.left),
     y: Number.parseFloat(element.style.top),
   }));
-  return { frame, projected };
-}
-
-async function selectUnit(page, unitId) {
-  const { frame, projected } = await unitScreenPoint(page, unitId);
   for (const yOffset of [22, 36, 50, 64]) {
-    await page.mouse.click(frame.x + projected.x, frame.y + projected.y + yOffset);
+    await page.locator("#game_canvas").evaluate((canvas, point) => {
+      const bounds = canvas.getBoundingClientRect();
+      const fire = (type, buttons) => canvas.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        pointerId: 77,
+        pointerType: "mouse",
+        button: 0,
+        buttons,
+        clientX: bounds.left + point.x,
+        clientY: bounds.top + point.y,
+      }));
+      fire("pointerdown", 1);
+      fire("pointerup", 0);
+    }, { x: projected.x, y: projected.y + yOffset });
     await page.waitForTimeout(80);
     if (await page.locator("#game_canvas").getAttribute("data-selected-unit") === unitId) {
       return;
     }
   }
-  assert.fail(`could not select ${unitId} from its projected HUD anchor`);
+  assert.fail(`could not focus ${unitId} from its projected battlefield anchor`);
 }
 
-async function verifyResultAndRestart(browser, scenario, expectedResult) {
-  const context = await browser.newContext({ viewport: { width: 1600, height: 900 } });
+async function verifyHudAlignment(page) {
+  const frame = await page.locator("#content_layer").boundingBox();
+  const huds = await page.locator(".unit-hud").evaluateAll((elements) =>
+    elements.map((element) => {
+      const bounds = element.getBoundingClientRect();
+      return {
+        id: element.dataset.unitId,
+        label: element.getAttribute("aria-label"),
+        left: bounds.left,
+        right: bounds.right,
+        top: bounds.top,
+        bottom: bounds.bottom,
+      };
+    }),
+  );
+  assert.equal(huds.length, 6);
+  assert.equal(new Set(huds.map((hud) => hud.id)).size, 6);
+  for (const hud of huds) {
+    assert.match(hud.label, /^Inspect /);
+    assert.ok(hud.left >= frame.x - 1 && hud.right <= frame.x + frame.width + 1);
+    assert.ok(hud.top >= frame.y - 1 && hud.bottom <= frame.y + frame.height + 1);
+  }
+  const actionBar = await page.locator(".action-bar").boundingBox();
+  assert.ok(actionBar.x >= frame.x && actionBar.x + actionBar.width <= frame.x + frame.width);
+  assert.ok(actionBar.y >= frame.y && actionBar.y + actionBar.height <= frame.y + frame.height);
+}
+
+async function verifyResultAndRestart(
+  browser,
+  scenario,
+  expectedResult,
+  contextOptions = { viewport: { width: 1600, height: 900 } },
+) {
+  const context = await browser.newContext(contextOptions);
+  await blockExternalOrigins(context);
   const page = await context.newPage();
   const monitor = monitorPage(page);
   const url = new URL(baseUrl);
@@ -136,6 +195,14 @@ async function verifyResultAndRestart(browser, scenario, expectedResult) {
   const terminal = JSON.parse(await page.locator("#game_canvas").getAttribute("data-battle-state"));
   assert.equal(terminal.phase, "result");
   assert.equal(terminal.result, expectedResult);
+  assert.equal(terminal.activeUnitId, null);
+  assert.equal(terminal.pendingResolution, null);
+  assert.equal(
+    terminal.units.find((unit) => unit.id === (scenario === "victory" ? "player-1" : "enemy-1"))
+      .actionPoints,
+    2,
+    "the decisive one-AP shot must be reflected in terminal state",
+  );
   assert.equal(await page.locator(".action-button:enabled").count(), 0);
   await page.waitForFunction(() => {
     const states = JSON.parse(document.querySelector("#game_canvas").dataset.unitPresentationStates ?? "[]");
@@ -152,19 +219,38 @@ async function verifyResultAndRestart(browser, scenario, expectedResult) {
   ]) {
     await selectUnit(page, unitId);
     assert.equal(await page.locator("#game_canvas").getAttribute("data-selected-unit"), unitId);
+    const terminalUnit = terminal.units.find((unit) => unit.id === unitId);
+    const inspection = await page.locator(".inspection-panel").innerText();
+    assert.match(inspection, new RegExp(terminalUnit.label));
+    assert.match(inspection, new RegExp(`Health\\s+${terminalUnit.health}/${terminalUnit.maxHealth}`));
+    if (terminalUnit.health === 0) {
+      assert.match(inspection, /Status\s+Dead/);
+      if (terminalUnit.team === "player") {
+        assert.match(inspection, /Actions\s+None/);
+      }
+    }
   }
 
-  const frame = await page.locator("#content_layer").boundingBox();
-  const cameraBefore = await cameraState(page);
-  await page.mouse.move(frame.x + frame.width * 0.8, frame.y + frame.height * 0.68);
-  await page.mouse.down({ button: "right" });
-  await page.mouse.move(frame.x + frame.width * 0.86, frame.y + frame.height * 0.72, { steps: 6 });
-  await page.mouse.up({ button: "right" });
-  await page.mouse.wheel(0, -260);
-  await page.waitForTimeout(100);
-  const cameraAfter = await cameraState(page);
-  assert.notEqual(cameraAfter.alpha, cameraBefore.alpha);
-  assert.ok(cameraAfter.radius < cameraBefore.radius);
+  if (!contextOptions.hasTouch) {
+    const frame = await page.locator("#content_layer").boundingBox();
+    const cameraBefore = await cameraState(page);
+    await page.mouse.move(frame.x + frame.width * 0.8, frame.y + frame.height * 0.68);
+    await page.mouse.down({ button: "right" });
+    await page.mouse.move(frame.x + frame.width * 0.86, frame.y + frame.height * 0.72, { steps: 6 });
+    await page.mouse.up({ button: "right" });
+    await page.mouse.wheel(0, -260);
+    await page.waitForTimeout(100);
+    const cameraAfter = await cameraState(page);
+    assert.notEqual(cameraAfter.alpha, cameraBefore.alpha);
+    assert.ok(cameraAfter.radius < cameraBefore.radius);
+  }
+
+  await page.waitForTimeout(250);
+  assert.deepEqual(
+    JSON.parse(await page.locator("#game_canvas").getAttribute("data-battle-state")),
+    terminal,
+    "terminal result must stop queued actions",
+  );
 
   await page.getByRole("button", { name: "Restart" }).click();
   await page.getByRole("dialog", { name: resultName }).waitFor({ state: "detached" });
@@ -174,20 +260,29 @@ async function verifyResultAndRestart(browser, scenario, expectedResult) {
   assert.equal(restarted.result, null);
   assert.equal(restarted.round, 1);
   assert.equal(restarted.selectedUnitId, "player-2");
+  assert.equal(restarted.activeUnitId, null);
+  assert.equal(restarted.pendingAction, null);
+  assert.equal(restarted.pendingConfirmation, null);
+  assert.deepEqual(restarted.enemyActivationOrder, []);
+  assert.equal(restarted.enemyActivationIndex, -1);
+  assert.deepEqual(restarted.random, restarted.initialRandom);
   assert.deepEqual(
     restarted.units.map((unit) => ({
       id: unit.id,
+      cell: unit.cell,
       health: unit.health,
+      weaponId: unit.weaponId,
       actionPoints: unit.actionPoints,
+      activity: unit.activity,
       overwatch: unit.overwatch,
     })),
     [
-      { id: "player-1", health: 10, actionPoints: 3, overwatch: null },
-      { id: "player-2", health: 10, actionPoints: 3, overwatch: null },
-      { id: "player-3", health: 10, actionPoints: 3, overwatch: null },
-      { id: "enemy-1", health: 10, actionPoints: 0, overwatch: null },
-      { id: "enemy-2", health: 10, actionPoints: 0, overwatch: null },
-      { id: "enemy-3", health: 10, actionPoints: 0, overwatch: null },
+      { id: "player-1", cell: { column: 2, row: 1 }, health: 10, weaponId: "short", actionPoints: 3, activity: null, overwatch: null },
+      { id: "player-2", cell: { column: 6, row: 1 }, health: 10, weaponId: "balanced", actionPoints: 3, activity: null, overwatch: null },
+      { id: "player-3", cell: { column: 10, row: 1 }, health: 10, weaponId: "long", actionPoints: 3, activity: null, overwatch: null },
+      { id: "enemy-1", cell: { column: 2, row: 6 }, health: 10, weaponId: "balanced", actionPoints: 0, activity: null, overwatch: null },
+      { id: "enemy-2", cell: { column: 6, row: 6 }, health: 10, weaponId: "short", actionPoints: 0, activity: null, overwatch: null },
+      { id: "enemy-3", cell: { column: 10, row: 6 }, health: 10, weaponId: "long", actionPoints: 0, activity: null, overwatch: null },
     ],
   );
   await page.locator('#game_canvas[data-selected-unit="player-2"]').waitFor();
@@ -213,6 +308,135 @@ async function verifyBlockedAudioFallback(browser) {
   await page.getByRole("button", { name: /Shoot 1 AP/ }).click();
   await selectUnit(page, "enemy-1");
   await page.getByRole("dialog", { name: "Victory" }).waitFor({ timeout: 10_000 });
+  assert.deepEqual(monitor.problems, []);
+  assert.deepEqual(monitor.externalRequests, []);
+  await context.close();
+}
+
+async function verifyPresentationFailureFallback(browser) {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const page = await context.newPage();
+  const monitor = monitorPage(page);
+  const url = new URL(baseUrl);
+  url.searchParams.set("e2e-presentation-failure", "move");
+  await page.goto(url.href, { waitUntil: "networkidle" });
+  await waitForScene(page);
+  await selectUnit(page, "player-2");
+  await page.getByRole("button", { name: "Move" }).click();
+  await page.locator('#game_canvas:not([data-movement-destination-count="0"])').waitFor();
+  const targets = JSON.parse(
+    await page.locator("#game_canvas").getAttribute("data-movement-destinations"),
+  );
+  const target = targets.find((candidate) => candidate.cost === 1);
+  const frame = await page.locator("#content_layer").boundingBox();
+  await page.mouse.click(frame.x + target.x, frame.y + target.y);
+  await page.waitForFunction(([column, row]) => {
+    const state = JSON.parse(document.querySelector("#game_canvas").dataset.battleState);
+    const unit = state.units.find((candidate) => candidate.id === "player-2");
+    return unit.actionPoints === 2 && unit.cell.column === column && unit.cell.row === row;
+  }, [target.column, target.row]);
+  assert.equal(
+    await page.locator("#game_canvas").getAttribute("data-presentation-fallback"),
+    "move",
+  );
+  assert.equal(await page.getByRole("button", { name: "Move" }).isEnabled(), true);
+  assert.deepEqual(monitor.problems, []);
+  assert.deepEqual(monitor.externalRequests, []);
+  await context.close();
+}
+
+async function verifyReducedMotionPresentation(browser) {
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 720 },
+    reducedMotion: "reduce",
+  });
+  const page = await context.newPage();
+  const monitor = monitorPage(page);
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
+  await waitForScene(page);
+  assert.equal(
+    await page.locator("#game_canvas").getAttribute("data-reduced-motion"),
+    "true",
+  );
+  await selectUnit(page, "player-2");
+  await page.getByRole("button", { name: "Move" }).click();
+  await page.locator('#game_canvas:not([data-movement-destination-count="0"])').waitFor();
+  const targets = JSON.parse(
+    await page.locator("#game_canvas").getAttribute("data-movement-destinations"),
+  );
+  const target = targets.find((candidate) => candidate.cost === 1 && candidate.steps >= 3);
+  const frame = await page.locator("#content_layer").boundingBox();
+  const startedAt = Date.now();
+  await page.mouse.click(frame.x + target.x, frame.y + target.y);
+  await page.waitForFunction(() => {
+    const state = JSON.parse(document.querySelector("#game_canvas").dataset.battleState);
+    return state.units.find((unit) => unit.id === "player-2").actionPoints === 2;
+  });
+  assert.ok(Date.now() - startedAt < 900, "reduced-motion move should use shortened timing");
+  assert.deepEqual(monitor.problems, []);
+  assert.deepEqual(monitor.externalRequests, []);
+  await context.close();
+}
+
+async function verifyReactionPresentation(browser) {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const page = await context.newPage();
+  const monitor = monitorPage(page);
+  const url = new URL(baseUrl);
+  url.searchParams.set("e2e-result", "reaction");
+  await page.goto(url.href, { waitUntil: "networkidle" });
+  await waitForScene(page);
+  await page.waitForFunction(() => {
+    const history = JSON.parse(
+      document.querySelector("#game_canvas").dataset.reactionFeedbackHistory ?? "[]",
+    );
+    return history.length > 0;
+  }, null, { timeout: 12_000 });
+  const reactionHistory = JSON.parse(
+    await page.locator("#game_canvas").getAttribute("data-reaction-feedback-history"),
+  );
+  const presentedReaction = reactionHistory[0];
+  assert.equal(presentedReaction.reactorId, "player-1");
+  assert.equal(presentedReaction.moverId, "enemy-1");
+  assert.ok(Number.isInteger(presentedReaction.completedCell?.column));
+  assert.ok(Number.isInteger(presentedReaction.completedCell?.row));
+  await page.waitForFunction(() => {
+    const events = JSON.parse(
+      document.querySelector("#game_canvas").dataset.presentationEvents ?? "[]",
+    );
+    return events.some((event) => event.type === "shot-complete" && event.reaction === true);
+  });
+  const presentationEvents = JSON.parse(
+    await page.locator("#game_canvas").getAttribute("data-presentation-events"),
+  );
+  const stepCompleteIndex = presentationEvents.findIndex((event) => (
+    event.type === "move-step-complete" &&
+    event.unitId === presentedReaction.moverId &&
+    event.cell?.column === presentedReaction.completedCell.column &&
+    event.cell?.row === presentedReaction.completedCell.row
+  ));
+  const reactionFacingIndex = presentationEvents.findIndex((event, index) => (
+    index > stepCompleteIndex &&
+    event.type === "shot-facing" &&
+    event.reaction === true &&
+    event.shooterId === presentedReaction.reactorId &&
+    event.targetId === presentedReaction.moverId
+  ));
+  const reactionCompleteIndex = presentationEvents.findIndex((event, index) => (
+    index > reactionFacingIndex &&
+    event.type === "shot-complete" &&
+    event.reaction === true &&
+    event.shooterId === presentedReaction.reactorId &&
+    event.targetId === presentedReaction.moverId
+  ));
+  const nextMoveIndex = presentationEvents.findIndex((event, index) => (
+    index > reactionFacingIndex &&
+    event.type === "move-step-started" &&
+    event.unitId === presentedReaction.moverId
+  ));
+  assert.ok(stepCompleteIndex >= 0 && reactionFacingIndex > stepCompleteIndex);
+  assert.ok(reactionCompleteIndex > reactionFacingIndex);
+  assert.ok(nextMoveIndex === -1 || nextMoveIndex > reactionCompleteIndex);
   assert.deepEqual(monitor.problems, []);
   assert.deepEqual(monitor.externalRequests, []);
   await context.close();
@@ -262,6 +486,7 @@ try {
 
   const desktopFrame = await desktop.locator("#content_layer").boundingBox();
   assert.ok(Math.abs(desktopFrame.width / desktopFrame.height - 16 / 9) < 0.002);
+  await verifyHudAlignment(desktop);
   const pixels = await canvasPixelStats(desktop);
   assert.ok(pixels.visibleSamples > 2_000, `canvas visible samples were ${pixels.visibleSamples}`);
   assert.ok(pixels.colorBuckets > 12, `canvas color buckets were ${pixels.colorBuckets}`);
@@ -281,6 +506,7 @@ try {
   await desktop.screenshot({ path: `${evidenceDirectory}/desktop-short.png`, fullPage: true });
   await desktop.setViewportSize({ width: 1600, height: 900 });
   await desktop.waitForTimeout(120);
+  await verifyHudAlignment(desktop);
 
   assert.equal(await desktop.locator('.unit-hud[data-unit-status="Idle"]').count(), 6);
   await desktop.waitForFunction(() => {
@@ -428,7 +654,10 @@ try {
       fire("pointerdown", 1);
       fire("pointerup", 0);
     }
-  }, overwatchAimPoints.map((point) => ({
+  }, [
+    ...overwatchAimPoints.filter((point) => !(point.column === 6 && point.row === 7)),
+    overwatchAimPoints.find((point) => point.column === 6 && point.row === 7),
+  ].map((point) => ({
     x: overwatchFrame.x + point.x,
     y: overwatchFrame.y + point.y,
   })));
@@ -534,8 +763,7 @@ try {
       .filter((unit) => unit.team === "player" && unit.health > 0)
       .every((unit) => unit.actionPoints === 3),
   );
-
-  await selectUnit(desktop, "enemy-1");
+  await focusUnitOnCanvas(desktop, "enemy-1");
   const focusedCamera = await cameraState(desktop);
   assert.equal(focusedCamera.alpha, initialCamera.alpha);
   assert.equal(focusedCamera.beta, initialCamera.beta);
@@ -585,9 +813,122 @@ try {
   await mobile.setViewportSize({ width: 844, height: 390 });
   await mobile.getByText("Rotate device", { exact: true }).waitFor({ state: "detached" });
   await mobile.waitForTimeout(120);
-  const mobileFrame = await mobile.locator("#content_layer").boundingBox();
+  let mobileFrame = await mobile.locator("#content_layer").boundingBox();
   assert.ok(Math.abs(mobileFrame.width / mobileFrame.height - 16 / 9) < 0.002);
+  await verifyHudAlignment(mobile);
   await mobile.screenshot({ path: `${evidenceDirectory}/mobile-landscape-initial.png`, fullPage: true });
+
+  await mobile.locator('[data-unit-id="player-1"]').tap();
+  await mobile.waitForFunction(() => {
+    return document.querySelector("#game_canvas").dataset.selectedUnit === "player-1";
+  });
+  await mobile.getByRole("button", { name: "Move" }).tap();
+  await mobile.locator('#game_canvas:not([data-movement-destination-count="0"])').waitFor();
+  const pendingMobileMove = JSON.parse(
+    await mobile.locator("#game_canvas").getAttribute("data-battle-state"),
+  );
+  assert.equal(pendingMobileMove.pendingAction?.action, "move");
+
+  await mobile.setViewportSize({ width: 390, height: 844 });
+  await mobile.getByText("Rotate device", { exact: true }).waitFor();
+  assert.deepEqual(
+    JSON.parse(await mobile.locator("#game_canvas").getAttribute("data-battle-state")),
+    pendingMobileMove,
+  );
+  await mobile.setViewportSize({ width: 844, height: 390 });
+  await mobile.getByText("Rotate device", { exact: true }).waitFor({ state: "detached" });
+  await mobile.waitForTimeout(120);
+  mobileFrame = await mobile.locator("#content_layer").boundingBox();
+
+  const cameraBeforeTargetingGesture = await cameraState(mobile);
+  await mobile.locator("#game_canvas").evaluate((canvas) => {
+    const bounds = canvas.getBoundingClientRect();
+    const fire = (type, pointerId, x, y, buttons) => {
+      canvas.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        pointerId,
+        pointerType: "touch",
+        isPrimary: pointerId === 1,
+        button: 0,
+        buttons,
+        clientX: bounds.left + x,
+        clientY: bounds.top + y,
+      }));
+    };
+    fire("pointerdown", 1, 250, 155, 1);
+    fire("pointerdown", 2, 510, 225, 1);
+    fire("pointermove", 1, 215, 170, 1);
+    fire("pointermove", 2, 565, 215, 1);
+    fire("pointerup", 1, 215, 170, 0);
+    fire("pointerup", 2, 565, 215, 0);
+  });
+  await mobile.waitForTimeout(120);
+  const cameraAfterTargetingGesture = await cameraState(mobile);
+  assert.notEqual(cameraAfterTargetingGesture.alpha, cameraBeforeTargetingGesture.alpha);
+  const afterTargetingGesture = JSON.parse(
+    await mobile.locator("#game_canvas").getAttribute("data-battle-state"),
+  );
+  assert.deepEqual(afterTargetingGesture.pendingAction, pendingMobileMove.pendingAction);
+  assert.equal(afterTargetingGesture.selectedUnitId, pendingMobileMove.selectedUnitId);
+
+  const mobileMoveTargets = JSON.parse(
+    await mobile.locator("#game_canvas").getAttribute("data-movement-destinations"),
+  );
+  const mobileMoveTarget = await mobile.evaluate((targets) => {
+    const frame = document.querySelector("#content_layer").getBoundingClientRect();
+    return targets.find((target) => {
+      if (target.cost !== 1) {
+        return false;
+      }
+      const element = document.elementFromPoint(frame.left + target.x, frame.top + target.y);
+      return element?.id === "game_canvas";
+    });
+  }, mobileMoveTargets);
+  assert.ok(mobileMoveTarget, "mobile targeting must expose a one-AP destination");
+  await mobile.touchscreen.tap(
+    mobileFrame.x + mobileMoveTarget.x,
+    mobileFrame.y + mobileMoveTarget.y,
+  );
+  await mobile.waitForFunction(() => {
+    const state = JSON.parse(document.querySelector("#game_canvas").dataset.battleState);
+    return state.units.find((unit) => unit.id === "player-1").actionPoints === 2;
+  });
+  await mobile.waitForFunction(() => !document.querySelector('[data-action="move"]').disabled);
+
+  await mobile.locator('[data-unit-id="player-2"]').tap();
+  await mobile.getByRole("button", { name: /Shoot 1 AP/ }).tap();
+  const mobileShootTarget = mobile.locator('.unit-hud[data-valid-target="true"]').first();
+  await mobileShootTarget.waitFor();
+  await mobileShootTarget.tap();
+  await mobile.locator('#game_canvas[data-shot-status="complete"]').waitFor();
+
+  await mobile.locator('[data-unit-id="player-3"]').tap();
+  await mobile.getByRole("button", { name: /Overwatch 3 AP/ }).tap();
+  const mobileAimPoints = JSON.parse(
+    await mobile.locator("#game_canvas").getAttribute("data-overwatch-aim-points"),
+  );
+  const mobileAimPoint = await mobile.evaluate((points) => {
+    const frame = document.querySelector("#content_layer").getBoundingClientRect();
+    return points.find((point) => {
+      const element = document.elementFromPoint(frame.left + point.x, frame.top + point.y);
+      return element?.id === "game_canvas";
+    });
+  }, mobileAimPoints);
+  assert.ok(mobileAimPoint, "mobile Overwatch must expose an unobstructed projected aim point");
+  await mobile.touchscreen.tap(
+    mobileFrame.x + mobileAimPoint.x,
+    mobileFrame.y + mobileAimPoint.y,
+  );
+  await mobile.waitForFunction(() => {
+    const state = JSON.parse(document.querySelector("#game_canvas").dataset.battleState);
+    return state.pendingAction?.action === "overwatch" && state.pendingAction.targetCell;
+  });
+  await mobile.getByRole("button", { name: /Overwatch 3 AP/ }).tap();
+  await mobile.waitForFunction(() => {
+    const state = JSON.parse(document.querySelector("#game_canvas").dataset.battleState);
+    return state.units.find((unit) => unit.id === "player-3").overwatch?.shotsRemaining === 3;
+  });
 
   const beforeTouch = await cameraState(mobile);
   await mobile.locator("#game_canvas").evaluate((canvas) => {
@@ -624,7 +965,16 @@ try {
 
   await verifyResultAndRestart(browser, "victory", "victory");
   await verifyResultAndRestart(browser, "defeat", "defeat");
+  await verifyResultAndRestart(browser, "victory", "victory", {
+    viewport: { width: 844, height: 390 },
+    isMobile: true,
+    hasTouch: true,
+    deviceScaleFactor: 1,
+  });
   await verifyBlockedAudioFallback(browser);
+  await verifyPresentationFailureFallback(browser);
+  await verifyReducedMotionPresentation(browser);
+  await verifyReactionPresentation(browser);
 
   const failureContext = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   await failureContext.route("**/assets/models/character.glb", (route) => {

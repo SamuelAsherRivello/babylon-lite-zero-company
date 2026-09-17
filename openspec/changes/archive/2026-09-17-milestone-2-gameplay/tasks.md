@@ -35,13 +35,13 @@
 
 - [x] 5.1 Have Agent 2 source or create exactly three to five redistributable sound effects and any remaining original/permissive visual assets, record creator/source/license/local filename for each, and obtain Agent 3 provenance PASS before integration.
 - [x] 5.2 Integrate local action sounds with browser gesture unlocking and persistent mute in Settings; verify blocked-audio and muted play remain fully playable and obtain Agent 3 PASS.
-- [ ] 5.3 Integrate programmatic Idle bob, center-to-center walking bob/facing, Overwatch aim motion, shooting recoil/muzzle flicker, damage shake/color flash, dead settling, and restrained local tracer/impact feedback whose timing gates presentation but never determines rules; verify every Status, event ordering, reduced/failed feedback fallback, and Agent 3 PASS.
-- [ ] 5.4 Polish desktop mouse and mobile landscape touch targeting without regressing camera gestures, 16:9 framing, rotate-device blocking, HUD alignment, or accessible control states; verify the supported viewport matrix and obtain Agent 3 PASS.
-- [ ] 5.5 Run focused tests, `npm test`, `npm run build`, full desktop/mobile browser flows, clean-console checks, and a blocked-external-network playthrough through result and restart; iterate until every check passes and Agent 3 records checkpoint PASS.
+- [x] 5.3 Integrate programmatic Idle bob, center-to-center walking bob/facing, Overwatch aim motion, shooting recoil/muzzle flicker, damage shake/color flash, dead settling, and restrained local tracer/impact feedback whose timing gates presentation but never determines rules; verify every Status, event ordering, reduced/failed feedback fallback, and Agent 3 PASS.
+- [x] 5.4 Polish desktop mouse and mobile landscape touch targeting without regressing camera gestures, 16:9 framing, rotate-device blocking, HUD alignment, or accessible control states; verify the supported viewport matrix and obtain Agent 3 PASS.
+- [x] 5.5 Run focused tests, `npm test`, `npm run build`, full desktop/mobile browser flows, clean-console checks, and a blocked-external-network playthrough through result and restart; iterate until every check passes and Agent 3 records checkpoint PASS.
 
 ## 6. Documentation And Release
 
-- [ ] 6.1 Update README gameplay, controls, mobile orientation, offline behavior, asset attribution links, and visible version; verify every documented command and current UI claim against the checkout and obtain Agent 3 PASS.
-- [ ] 6.2 Complete the template delivery checklist, verify OpenSpec implementation consistency and strict validation, and have Agent 3 issue final PASS only after every task and all five checkpoint records are complete.
+- [x] 6.1 Update README gameplay, controls, mobile orientation, offline behavior, asset attribution links, and visible version; verify every documented command and current UI claim against the checkout and obtain Agent 3 PASS.
+- [x] 6.2 Complete the template delivery checklist, verify OpenSpec implementation consistency and strict validation, and have Agent 3 issue final PASS only after every task and all five checkpoint records are complete.
 - [ ] 6.3 Sync and archive `milestone-2-gameplay`, verify main specs and archives, then commit only scoped project files and perform a normal non-force push after confirming no secret or unrelated file is staged.
 - [ ] 6.4 Create a new, non-overwriting GitHub release whose version matches the README and repository version file, verify the public repository and release page show that version, and retain the final Vite URL for local play.

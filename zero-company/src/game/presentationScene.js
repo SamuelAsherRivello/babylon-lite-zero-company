@@ -26,6 +26,179 @@ const COLORS = Object.freeze({
   moveThree: Color3.FromHexString("#ffd43b"),
 });
 
+const STANDARD_PRESENTATION_TIMINGS = Object.freeze({
+  moveStepMs: 180,
+  shotMs: 420,
+  damageMs: 260,
+  deadSettleMs: 260,
+});
+
+const REDUCED_PRESENTATION_TIMINGS = Object.freeze({
+  moveStepMs: 45,
+  shotMs: 90,
+  damageMs: 70,
+  deadSettleMs: 1,
+});
+
+export function getPresentationTimings(reducedMotion = false) {
+  return reducedMotion
+    ? REDUCED_PRESENTATION_TIMINGS
+    : STANDARD_PRESENTATION_TIMINGS;
+}
+
+export function resolvePresentationStatus(unit) {
+  if (unit.health <= 0) {
+    return "dead";
+  }
+  if (unit.activity === "taking-damage") {
+    return "taking-damage";
+  }
+  if (unit.activity === "moving") {
+    return "moving";
+  }
+  if (unit.activity === "shooting") {
+    return "shooting";
+  }
+  if (unit.overwatch) {
+    return "overwatch";
+  }
+  return "idle";
+}
+
+export function createShotFeedbackTimeline(hit) {
+  return [
+    "shot-facing",
+    "muzzle-flash",
+    "tracer-visible",
+    hit ? "impact-visible" : "miss-visible",
+    "shot-complete",
+  ];
+}
+
+export function createPresentationQueue({ onFailure = () => {} } = {}) {
+  let tail = Promise.resolve();
+
+  return {
+    enqueue(label, operation) {
+      const result = tail.then(async () => {
+        try {
+          await operation();
+          return true;
+        } catch (error) {
+          try {
+            onFailure(label, error);
+          } catch {
+            // Presentation diagnostics must never interrupt gameplay fallback.
+          }
+          return false;
+        }
+      });
+      tail = result.then(() => undefined, () => undefined);
+      return result;
+    },
+  };
+}
+
+export function createPresentationFailureGate(nextFailure = null) {
+  let pending = nextFailure === "move" || nextFailure === "shot"
+    ? nextFailure
+    : null;
+
+  return {
+    consume(kind) {
+      if (pending !== kind) {
+        return false;
+      }
+      pending = null;
+      return true;
+    },
+    get pending() {
+      return pending;
+    },
+  };
+}
+
+function clamp01(value) {
+  return Math.max(0, Math.min(value, 1));
+}
+
+export function sampleUnitPresentationPose({
+  status,
+  elapsed,
+  stateElapsed = elapsed,
+  phaseOffset = 0,
+  reducedMotion = false,
+}) {
+  const timings = getPresentationTimings(reducedMotion);
+  const phase = elapsed * 2.2 + phaseOffset;
+  const pose = {
+    positionX: 0,
+    positionY: 0,
+    positionZ: 0,
+    rotationX: 0,
+    rotationY: 0,
+    rotationZ: 0,
+    scaleY: 1,
+    emissive: { r: 0, g: 0, b: 0 },
+  };
+
+  if (status === "dead") {
+    const progress = reducedMotion
+      ? 1
+      : clamp01((stateElapsed * 1000) / timings.deadSettleMs);
+    const eased = 1 - ((1 - progress) ** 3);
+    pose.rotationZ = progress >= 1 ? -1.42 : -1.42 * eased;
+    pose.positionY = 0.04 * eased;
+    pose.scaleY = 1 - 0.04 * eased;
+    return pose;
+  }
+
+  if (status === "taking-damage") {
+    const flash = 1 - clamp01((stateElapsed * 1000) / timings.damageMs);
+    if (!reducedMotion) {
+      pose.positionX = Math.sin(elapsed * 68) * 0.055 * flash;
+      pose.rotationZ = Math.sin(elapsed * 52) * 0.08 * flash;
+    }
+    pose.emissive = { r: 0.9 * flash, g: 0.12 * flash, b: 0.08 * flash };
+    return pose;
+  }
+
+  if (status === "moving") {
+    if (!reducedMotion) {
+      pose.positionY = Math.abs(Math.sin(elapsed * 13)) * 0.09;
+      pose.rotationZ = Math.sin(elapsed * 13) * 0.035;
+    }
+    return pose;
+  }
+
+  if (status === "shooting") {
+    const progress = clamp01((stateElapsed * 1000) / timings.shotMs);
+    const recoil = Math.sin(progress * Math.PI);
+    pose.positionZ = -(0.03 + recoil * (reducedMotion ? 0.025 : 0.075));
+    pose.rotationX = -0.045 * (reducedMotion ? 0.55 : 1);
+    pose.emissive = {
+      r: 0.12 * recoil,
+      g: 0.18 * recoil,
+      b: 0.2 * recoil,
+    };
+    return pose;
+  }
+
+  if (status === "overwatch") {
+    if (!reducedMotion) {
+      pose.positionY = Math.sin(phase * 1.4) * 0.018;
+      pose.rotationY = Math.sin(phase * 1.8) * 0.025;
+    }
+    return pose;
+  }
+
+  if (!reducedMotion) {
+    pose.positionY = Math.sin(phase) * 0.025;
+    pose.rotationZ = Math.sin(phase * 0.7) * 0.009;
+  }
+  return pose;
+}
+
 function createStandardMaterial(scene, name, color, options = {}) {
   const material = new StandardMaterial(name, scene);
   material.diffuseColor = color;
@@ -531,28 +704,14 @@ export function createUnitsFromTemplate({
   });
 }
 
-function presentationStatus(unit) {
-  if (unit.health <= 0) {
-    return "dead";
-  }
-  if (unit.activity === "taking-damage") {
-    return "taking-damage";
-  }
-  if (unit.activity === "moving") {
-    return "moving";
-  }
-  if (unit.activity === "shooting") {
-    return "shooting";
-  }
-  if (unit.overwatch) {
-    return "overwatch";
-  }
-  return "idle";
-}
-
-export function createUnitStateAnimator(scene, units) {
+export function createUnitStateAnimator(scene, units, { reducedMotion = false } = {}) {
   const states = new Map(
-    units.map((unit) => [unit.descriptor.id, { status: "idle", overwatch: null }]),
+    units.map((unit) => [unit.descriptor.id, {
+      status: "idle",
+      overwatch: null,
+      enteredAt: 0,
+      transient: null,
+    }]),
   );
   let elapsed = 0;
 
@@ -561,43 +720,29 @@ export function createUnitStateAnimator(scene, units) {
     for (let index = 0; index < units.length; index += 1) {
       const unit = units[index];
       const state = states.get(unit.descriptor.id);
-      const phase = elapsed * 2.2 + index * 0.72;
+      const activeState = state.transient ?? state;
+      const pose = sampleUnitPresentationPose({
+        status: activeState.status,
+        elapsed,
+        stateElapsed: Math.max(0, elapsed - activeState.enteredAt),
+        phaseOffset: index * 0.72,
+        reducedMotion,
+      });
       unit.model.position.copyFrom(unit.baseModelPosition);
       unit.model.rotation.copyFrom(unit.baseModelRotation);
       unit.model.scaling.copyFrom(unit.baseModelScaling);
-      unit.material.emissiveColor.copyFromFloats(0, 0, 0);
-
-      if (state.status === "dead") {
-        unit.model.rotation.z = -1.42;
-        unit.model.position.y = unit.baseModelPosition.y + 0.04;
-        unit.model.scaling.y *= 0.96;
-        continue;
-      }
-      if (state.status === "taking-damage") {
-        unit.model.position.x += Math.sin(elapsed * 68) * 0.055;
-        unit.model.rotation.z = Math.sin(elapsed * 52) * 0.08;
-        unit.material.emissiveColor.copyFromFloats(0.9, 0.12, 0.08);
-        continue;
-      }
-      if (state.status === "moving") {
-        unit.model.position.y += Math.abs(Math.sin(elapsed * 13)) * 0.09;
-        unit.model.rotation.z = Math.sin(elapsed * 13) * 0.035;
-        continue;
-      }
-      if (state.status === "shooting") {
-        unit.model.position.z -= 0.08 + Math.sin(elapsed * 28) * 0.025;
-        unit.model.rotation.x = -0.045;
-        unit.material.emissiveColor.copyFromFloats(0.12, 0.18, 0.2);
-        continue;
-      }
-      if (state.status === "overwatch") {
-        unit.model.position.y += Math.sin(phase * 1.4) * 0.018;
-        unit.model.rotation.y = Math.sin(phase * 1.8) * 0.025;
-        continue;
-      }
-
-      unit.model.position.y += Math.sin(phase) * 0.025;
-      unit.model.rotation.z = Math.sin(phase * 0.7) * 0.009;
+      unit.model.position.x += pose.positionX;
+      unit.model.position.y += pose.positionY;
+      unit.model.position.z += pose.positionZ;
+      unit.model.rotation.x += pose.rotationX;
+      unit.model.rotation.y += pose.rotationY;
+      unit.model.rotation.z += pose.rotationZ;
+      unit.model.scaling.y *= pose.scaleY;
+      unit.material.emissiveColor.copyFromFloats(
+        pose.emissive.r,
+        pose.emissive.g,
+        pose.emissive.b,
+      );
     }
   });
 
@@ -608,9 +753,13 @@ export function createUnitStateAnimator(scene, units) {
         if (!unit) {
           continue;
         }
+        const previous = states.get(stateUnit.id);
+        const status = resolvePresentationStatus(stateUnit);
         states.set(stateUnit.id, {
-          status: presentationStatus(stateUnit),
+          status,
           overwatch: stateUnit.overwatch,
+          enteredAt: previous?.status === status ? previous.enteredAt : elapsed,
+          transient: status === "dead" ? null : previous?.transient ?? null,
         });
         if (stateUnit.overwatch?.direction) {
           unit.container.rotation.y = Math.atan2(
@@ -620,10 +769,35 @@ export function createUnitStateAnimator(scene, units) {
         }
       }
     },
+    setTransientStatus(unitId, status) {
+      const state = states.get(unitId);
+      if (!state || state.status === "dead") {
+        return undefined;
+      }
+      const previous = state.transient;
+      state.transient = { status, enteredAt: elapsed };
+      return previous;
+    },
+    restoreTransientStatus(unitId, transient) {
+      const state = states.get(unitId);
+      if (state && state.status !== "dead") {
+        state.transient = transient ?? null;
+      }
+    },
+    clearTransientStatus(unitId) {
+      const state = states.get(unitId);
+      if (state) {
+        state.transient = null;
+      }
+    },
     snapshot() {
       return units.map((unit) => ({
         id: unit.descriptor.id,
-        status: states.get(unit.descriptor.id)?.status ?? "idle",
+        status: (
+          states.get(unit.descriptor.id)?.transient?.status ??
+          states.get(unit.descriptor.id)?.status ??
+          "idle"
+        ),
         modelPosition: unit.model.position.asArray(),
         modelRotation: unit.model.rotation.asArray(),
       }));

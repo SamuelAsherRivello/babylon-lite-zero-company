@@ -81,6 +81,7 @@ test("renders the live tactical interface", async () => {
   assert.match(app, /createInitialBattle/);
   assert.match(app, /getUnitInspection/);
   assert.match(app, /aria-disabled=\{!enabled\}/);
+  assert.match(app, /aria-pressed=\{active\}/);
   assert.match(app, /disabled=\{!enabled\}/);
   assert.match(app, /<dt>Status<\/dt>/);
   assert.match(app, /<dt>Actions<\/dt>/);
@@ -123,6 +124,19 @@ test("keeps every unit inspectable across phases and terminal state", () => {
   assert.equal(terminalInspections.filter(Boolean).length, 6);
   assert.equal(getUnitInspection(terminal, "player-1").status, "Dead");
   assert.ok(terminalInspections.every((unit) => unit.availableActions.length === 0));
+});
+
+test("keeps projected unit inspection reachable for mouse and touch", async () => {
+  const app = await readAppFile("src/App.jsx");
+  const styles = await readAppFile("src/style.css");
+
+  assert.match(app, /onClick=\{\(\) => onSelect\(unit\.id\)\}/);
+  assert.match(app, /aria-pressed=\{selected\}/);
+  assert.match(app, /aria-label=\{`Inspect \$\{unit\.label\}`\}/);
+  assert.match(styles, /\.unit-hud::after/);
+  assert.match(styles, /inset: -14px -10px/);
+  assert.match(styles, /\.result-dialog \{[\s\S]*?pointer-events: none;/);
+  assert.match(styles, /\.result-dialog \.confirmation-primary \{[\s\S]*?pointer-events: auto;/);
 });
 
 test("preserves the four corner roles and release version", async () => {

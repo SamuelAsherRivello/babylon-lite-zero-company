@@ -258,10 +258,30 @@ a {
 }
 
 .unit-hud {
+  appearance: none;
   position: absolute;
   width: 88px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
   transform: translate(-50%, -100%);
   filter: drop-shadow(0 2px 2px rgb(0 0 0 / 68%));
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.unit-hud::after {
+  position: absolute;
+  inset: -14px -10px;
+  content: "";
+}
+
+.unit-hud:focus-visible {
+  outline: 2px solid #35e6f4;
+  outline-offset: 12px;
 }
 
 .unit-hud_selected .unit-health {
@@ -493,7 +513,7 @@ a {
   width: min(260px, 70%);
   padding: 12px;
   transform: translateX(-50%);
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .result-dialog .confirmation-primary {
@@ -501,6 +521,7 @@ a {
   align-items: center;
   justify-content: center;
   gap: 7px;
+  pointer-events: auto;
 }
 
 .scene-state {
