@@ -68,6 +68,39 @@ Verification performed on 2026-09-16:
 The model is therefore self-contained at runtime and can be served entirely
 from the repository's local `public/assets/` tree.
 
-## Audio
+## Milestone 2 Audio
 
-No audio assets are included in milestone 1.
+No audio assets were included in milestone 1. Milestone 2 adds exactly four
+original sound effects for the compact battle. All four were generated locally
+on 2026-09-16 from mathematical waveforms and deterministically seeded noise;
+no recorded, sampled, downloaded, or proprietary source material was used.
+
+| Purpose | Local filename | Creator, source, or generation method | License | Modification |
+| --- | --- | --- | --- | --- |
+| Movement step | `zero-company/public/assets/audio/step.wav` | OpenAI Codex, Agent 2; original local synthesis using a decaying low-frequency thump and filtered deterministically seeded noise; no external source URL | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Rendered directly as mono 44.1 kHz, 16-bit PCM WAV; no post-generation modification |
+| Gunshot | `zero-company/public/assets/audio/shot.wav` | OpenAI Codex, Agent 2; original local synthesis using a descending oscillator sweep, seeded noise transient, and low-frequency body; no external source URL | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Rendered directly as mono 44.1 kHz, 16-bit PCM WAV; no post-generation modification |
+| Impact or damage | `zero-company/public/assets/audio/impact.wav` | OpenAI Codex, Agent 2; original local synthesis using two decaying resonances and a filtered seeded-noise impact transient; no external source URL | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Rendered directly as mono 44.1 kHz, 16-bit PCM WAV; no post-generation modification |
+| Overwatch confirmation | `zero-company/public/assets/audio/overwatch.wav` | OpenAI Codex, Agent 2; original local synthesis using paired 620 Hz and 930 Hz harmonic confirmation pulses; no external source URL | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | Rendered directly as mono 44.1 kHz, 16-bit PCM WAV; no post-generation modification |
+
+### Audio License And Redistribution Basis
+
+The four sound effects are original project output made solely from generated
+sample values. They contain no third-party recordings, samples, franchise
+audio, speech, music, or trademarked sonic material. They are dedicated to
+CC0 1.0 so they may be bundled, copied, modified, and redistributed with the
+public repository and release builds. No runtime network request or sibling
+audio dependency is required.
+
+### Audio Verification
+
+`ffprobe` parsed each file as a WAV containing one `pcm_s16le` stream at
+44,100 Hz, mono, 16 bits per sample.
+
+| Local filename | Duration | Size | SHA-256 |
+| --- | ---: | ---: | --- |
+| `step.wav` | 0.160 s | 14,156 bytes | `8a90603d58d5979a5ed9945ba22b5c39948f645e388633e780ef6ffa64c383b1` |
+| `shot.wav` | 0.280 s | 24,740 bytes | `4995303f0fbcca210d5ad6c231464ab43760a5be2650d08243153cf5c006492f` |
+| `impact.wav` | 0.240 s | 21,212 bytes | `fcfde5f3a25869c3040b280cdbc3714be0978d4b487de5ce1cf13dcfeb0fd323` |
+| `overwatch.wav` | 0.380 s | 33,560 bytes | `9f88b863949783ee1ec6ebeaa220ff6936c1aef45125e712684dd1c1c1b9304e` |
+
+Audio asset count: **4**.

@@ -10,17 +10,70 @@ import {
   RotateCcw,
   SkipForward,
   Square,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import versionText from "../../version.txt?raw";
+import { createZeroCompanyScene } from "./game/index.js";
+import { createAudioController } from "./game/audioController.js";
 import {
-  createZeroCompanyScene,
-  presentationDescriptors,
-} from "./game/index.js";
+  chooseEnemyPlan,
+  createScriptedRandom,
+  createInitialBattle,
+  dispatchBattleCommand,
+  getAttackPreview,
+  getReachableDestinations,
+  getUnitInspection,
+  resolveEnemyOverwatch,
+  resolveMoveWithOverwatch,
+  resolveShoot,
+  WEAPON_DEFINITIONS,
+} from "./game/rules/index.js";
 
 const fullscreenStorageKey = "babylon-lite-zero-company.fullscreen";
 const repositoryUrl = "https://github.com/SamuelAsherRivello/babylon-lite-zero-company";
 const portraitQuery = "(orientation: portrait) and (pointer: coarse)";
 const uiMarginPixels = 20;
+
+function createRuntimeBattle() {
+  if (!import.meta.env.DEV) {
+    return createInitialBattle();
+  }
+
+  const scenario = new URLSearchParams(window.location.search).get("e2e-result");
+  if (scenario !== "victory" && scenario !== "defeat") {
+    return createInitialBattle();
+  }
+
+  const state = createInitialBattle({
+    randomSource: createScriptedRandom([0, 0, 0, 0]),
+  });
+  return {
+    ...state,
+    units: state.units.map((unit) => {
+      if (scenario === "victory") {
+        if (unit.id === "enemy-1") {
+          return { ...unit, cell: { column: 2, row: 2 }, health: 1 };
+        }
+        if (unit.id === "enemy-2" || unit.id === "enemy-3") {
+          return { ...unit, health: 0 };
+        }
+      }
+      if (scenario === "defeat") {
+        if (unit.id === "player-1") {
+          return { ...unit, health: 1 };
+        }
+        if (unit.id === "player-2" || unit.id === "player-3") {
+          return { ...unit, health: 0 };
+        }
+        if (unit.id === "enemy-1") {
+          return { ...unit, cell: { column: 2, row: 2 } };
+        }
+      }
+      return unit;
+    }),
+  };
+}
 
 const actionControls = [
   { id: "move", label: "Move", Icon: Move },
@@ -28,6 +81,12 @@ const actionControls = [
   { id: "overwatch", label: "Overwatch", Icon: Eye },
   { id: "end-turn", label: "End Turn", Icon: SkipForward },
 ];
+
+const weaponLabels = Object.freeze({
+  short: "Scattergun",
+  balanced: "Rifle",
+  long: "Longarm",
+});
 
 function projectedPositionsMatch(previous, next) {
   if (previous.length !== next.length) {
@@ -62,7 +121,25 @@ function usePortraitBlocker() {
   return blocked;
 }
 
-function GameScene({ inputEnabled, onLoadingChange, onProjectedHudPositions, onSelectionChange }) {
+function GameScene({
+  battle,
+  committedOverwatchPreviews,
+  enemyIntent,
+  inputEnabled,
+  movePresentation,
+  movementDestinations,
+  onCellSelect,
+  onLoadingChange,
+  onMoveComplete,
+  onMoveStep,
+  onPresentationSettled,
+  onProjectedHudPositions,
+  onSelectionChange,
+  onShotComplete,
+  overwatchPreview,
+  selectedUnitId,
+  shotPresentation,
+}) {
   const canvasRef = useRef(null);
   const gameRef = useRef(null);
 
@@ -80,6 +157,10 @@ function GameScene({ inputEnabled, onLoadingChange, onProjectedHudPositions, onS
         canvas.dataset.presentationMeshCount = String(scene.meshes.length);
       },
       onProjectedHudPositions,
+      onCellSelect,
+      onWorldPick: (pick) => {
+        canvas.dataset.lastWorldPick = JSON.stringify(pick);
+      },
       onSelectionChange: (unit) => {
         canvas.dataset.selectedUnit = unit.id;
         onSelectionChange(unit);
@@ -94,11 +175,220 @@ function GameScene({ inputEnabled, onLoadingChange, onProjectedHudPositions, onS
       game.dispose();
       gameRef.current = null;
     };
-  }, [onLoadingChange, onProjectedHudPositions, onSelectionChange]);
+  }, [onCellSelect, onLoadingChange, onProjectedHudPositions, onSelectionChange]);
 
   useEffect(() => {
     gameRef.current?.setInputEnabled(inputEnabled);
   }, [inputEnabled]);
+
+  useEffect(() => {
+    const game = gameRef.current;
+    let active = true;
+    game?.ready.then(() => {
+      if (active) {
+        game.selectUnit(selectedUnitId, { focus: false, notify: false });
+        if (canvasRef.current) {
+          canvasRef.current.dataset.selectedUnit = selectedUnitId;
+        }
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [selectedUnitId]);
+
+  useEffect(() => {
+    if (canvasRef.current) {
+      canvasRef.current.dataset.battleState = JSON.stringify(battle);
+    }
+    const game = gameRef.current;
+    let active = true;
+    game?.ready.then(() => {
+      if (!active || !canvasRef.current) {
+        return;
+      }
+      canvasRef.current.dataset.unitPresentationStates = JSON.stringify(
+        game.syncUnitStates(battle),
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, [battle]);
+
+  useEffect(() => {
+    if (canvasRef.current) {
+      canvasRef.current.dataset.enemyIntent = JSON.stringify(enemyIntent);
+      if (enemyIntent) {
+        const history = JSON.parse(canvasRef.current.dataset.enemyIntentHistory ?? "[]");
+        history.push(enemyIntent);
+        canvasRef.current.dataset.enemyIntentHistory = JSON.stringify(history);
+      }
+    }
+  }, [enemyIntent]);
+
+  useEffect(() => {
+    const game = gameRef.current;
+    game?.setMovementDestinations(movementDestinations);
+    if (canvasRef.current) {
+      canvasRef.current.dataset.movementDestinationCount = String(movementDestinations.length);
+    }
+    let active = true;
+    game?.ready.then(() => {
+      if (!active || !canvasRef.current) {
+        return;
+      }
+      canvasRef.current.dataset.movementDestinations = JSON.stringify(
+        movementDestinations.map((destination) => ({
+          ...destination.cell,
+          cost: destination.minimumActionPoints,
+          steps: destination.steps,
+          ...game.projectCell(destination.cell),
+        })),
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, [movementDestinations]);
+
+  useEffect(() => {
+    const game = gameRef.current;
+    game?.setOverwatchPreviews([
+      ...(overwatchPreview ? [overwatchPreview] : []),
+      ...committedOverwatchPreviews,
+    ]);
+    if (canvasRef.current) {
+      canvasRef.current.dataset.overwatchPreview = JSON.stringify(overwatchPreview);
+      canvasRef.current.dataset.overwatchConeCount = String(
+        committedOverwatchPreviews.length + (overwatchPreview ? 1 : 0),
+      );
+    }
+    let active = true;
+    game?.ready.then(() => {
+      if (!active || !canvasRef.current) {
+        return;
+      }
+      canvasRef.current.dataset.overwatchAimPoints = JSON.stringify(
+        [
+          { column: 0, row: 0 },
+          { column: 0, row: 7 },
+          { column: 6, row: 7 },
+          { column: 12, row: 7 },
+          { column: 3, row: 0 },
+        ].map((cell) => ({ ...cell, ...game.projectCell(cell) })),
+      );
+      canvasRef.current.dataset.renderedOverwatchTip = JSON.stringify(
+        game.projectOverwatchTip(),
+      );
+      canvasRef.current.dataset.overwatchOriginPoint = JSON.stringify(
+        overwatchPreview ? game.projectCell(overwatchPreview.originCell) : null,
+      );
+      canvasRef.current.dataset.overwatchTargetPoint = JSON.stringify(
+        overwatchPreview ? game.projectCell(overwatchPreview.targetCell) : null,
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, [committedOverwatchPreviews, overwatchPreview]);
+
+  useEffect(() => {
+    const game = gameRef.current;
+    if (!game || !movePresentation) {
+      return undefined;
+    }
+
+    let active = true;
+    if (canvasRef.current) {
+      canvasRef.current.dataset.moveVisitedCells = "[]";
+    }
+    game.ready
+      .then(() => game.animateUnitPath(
+        movePresentation.unitId,
+        movePresentation.path,
+        (cell) => {
+          if (!active) {
+            return;
+          }
+          const visited = JSON.parse(canvasRef.current?.dataset.moveVisitedCells ?? "[]");
+          visited.push(cell);
+          if (canvasRef.current) {
+            canvasRef.current.dataset.moveVisitedCells = JSON.stringify(visited);
+          }
+          onMoveStep(movePresentation.unitId, cell);
+        },
+      ))
+      .then(() => {
+        if (active) {
+          onMoveComplete(movePresentation.finalState);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [movePresentation, onMoveComplete, onMoveStep]);
+
+  useEffect(() => {
+    const game = gameRef.current;
+    if (!game || !shotPresentation) {
+      return undefined;
+    }
+    let active = true;
+    if (canvasRef.current) {
+      canvasRef.current.dataset.shotStatus = "playing";
+      canvasRef.current.dataset.lastShot = JSON.stringify({
+        shooterId: shotPresentation.shooterId,
+        targetId: shotPresentation.targetId,
+        hit: shotPresentation.hit,
+        damage: shotPresentation.damage,
+      });
+    }
+    game.ready
+      .then(() => {
+        const playback = game.playShotFeedback(
+          shotPresentation.shooterId,
+          shotPresentation.targetId,
+          shotPresentation.hit,
+        );
+        if (canvasRef.current) {
+          canvasRef.current.dataset.shotParticleCount = String(
+            game.getPresentationSnapshot().shotParticleCount,
+          );
+        }
+        return playback;
+      })
+      .then(() => {
+        if (active) {
+          if (canvasRef.current) {
+            canvasRef.current.dataset.shotStatus = "complete";
+          }
+          onShotComplete(shotPresentation.finalState);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [onShotComplete, shotPresentation]);
+
+  useEffect(() => {
+    const game = gameRef.current;
+    if (!game || movePresentation || shotPresentation) {
+      return undefined;
+    }
+
+    let active = true;
+    game.ready
+      .then(() => game.syncBattleState(battle))
+      .finally(() => {
+        if (active) {
+          onPresentationSettled();
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [battle, movePresentation, onPresentationSettled, shotPresentation]);
 
   return (
     <canvas
@@ -109,7 +399,7 @@ function GameScene({ inputEnabled, onLoadingChange, onProjectedHudPositions, onS
   );
 }
 
-function UnitHud({ unit }) {
+function UnitHud({ active, attackPreview, selected, unit }) {
   if (!unit.visible) {
     return null;
   }
@@ -118,8 +408,10 @@ function UnitHud({ unit }) {
 
   return (
     <div
-      className={`unit-hud unit-hud_${unit.team}`}
+      className={`unit-hud unit-hud_${unit.team}${active ? " unit-hud_active" : ""}${selected ? " unit-hud_selected" : ""}`}
       data-unit-id={unit.id}
+      data-unit-status={unit.status}
+      data-valid-target={attackPreview?.selectable ? "true" : "false"}
       style={{ left: `${unit.x}px`, top: `${unit.y}px` }}
     >
       <div className="unit-health" aria-label={`${unit.health} health`}>
@@ -133,7 +425,19 @@ function UnitHud({ unit }) {
             ))}
           </span>
           <b>{unit.actionPoints} AP</b>
-          {unit.overwatch ? <Eye aria-label="Overwatch" size={14} /> : null}
+          {unit.overwatch ? (
+            <span className="overwatch-capacity" aria-label={`${unit.overwatch.shotsRemaining} Overwatch shots`}>
+              <Eye aria-label="Overwatch" size={14} />
+              {unit.overwatch.shotsRemaining}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+      {attackPreview ? (
+        <div className={`attack-preview${attackPreview.blocked ? " attack-preview_blocked" : ""}`}>
+          {attackPreview.blocked
+            ? "Blocked / 0%"
+            : `${Math.round(attackPreview.hitProbability * 100)}% / ${attackPreview.maxDamage} dmg`}
         </div>
       ) : null}
     </div>
@@ -153,29 +457,69 @@ function InspectionPanel({ unit }) {
         <span>{unit.team === "player" ? "Operative" : "Enemy"}</span>
       </div>
       <dl>
-        <div><dt>Health</dt><dd>{unit.health}/10</dd></div>
-        <div><dt>Weapon</dt><dd>{unit.weapon}</dd></div>
+        <div><dt>Health</dt><dd>{unit.health}/{unit.maxHealth}</dd></div>
+        <div><dt>Weapon</dt><dd>{weaponLabels[unit.weaponId] ?? unit.weaponId}</dd></div>
         <div><dt>AP</dt><dd>{unit.actionPoints}</dd></div>
-        <div><dt>Overwatch</dt><dd>{unit.overwatch ? "Ready" : "No"}</dd></div>
+        <div><dt>Status</dt><dd>{unit.status}</dd></div>
+        {unit.team === "player" ? (
+          <div>
+            <dt>Actions</dt>
+            <dd>{unit.availableActions.length > 0 ? unit.availableActions.join(", ") : "None"}</dd>
+          </div>
+        ) : null}
       </dl>
     </section>
   );
 }
 
 export function App() {
+  const [battle, setBattle] = useState(createRuntimeBattle);
+  const battleRef = useRef(battle);
+  const presentationBusyRef = useRef(false);
+  const audioRef = useRef(null);
+  if (audioRef.current === null) {
+    audioRef.current = createAudioController();
+  }
+  const [presentationBusy, setPresentationBusy] = useState(false);
+  const [movePresentation, setMovePresentation] = useState(null);
+  const [shotPresentation, setShotPresentation] = useState(null);
+  const [enemyIntent, setEnemyIntent] = useState(null);
+  const [muted, setMuted] = useState(() => audioRef.current.muted);
   const [fullscreenPreferred, setFullscreenPreferred] = useState(() => {
     return localStorage.getItem(fullscreenStorageKey) === "true";
   });
   const [loadState, setLoadState] = useState({ status: "loading", error: null });
   const [hudPositions, setHudPositions] = useState([]);
-  const [selectedUnit, setSelectedUnit] = useState(() => {
-    return presentationDescriptors.units.find(
-      (unit) => unit.id === presentationDescriptors.feedback.selectedUnitId,
-    );
-  });
+  const [selectedUnitId, setSelectedUnitId] = useState(() => battle.selectedUnitId);
   const portraitBlocked = usePortraitBlocker();
   const versionNumber = versionText.trim().replace(/^version=/, "").replace(/^v/, "");
   const contentLayer = document.getElementById("content_layer");
+
+  const playSound = useCallback((effect) => {
+    void audioRef.current.play(effect);
+  }, []);
+
+  useEffect(() => {
+    const unlock = () => audioRef.current.unlock();
+    window.addEventListener("pointerdown", unlock, { capture: true });
+    window.addEventListener("keydown", unlock, { capture: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock, { capture: true });
+      window.removeEventListener("keydown", unlock, { capture: true });
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!shotPresentation) {
+      return undefined;
+    }
+    playSound("shot");
+    if (!shotPresentation.hit) {
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => playSound("impact"), 120);
+    return () => window.clearTimeout(timeout);
+  }, [playSound, shotPresentation]);
 
   const handleLoadingChange = useCallback((nextState) => {
     setLoadState({
@@ -191,8 +535,293 @@ export function App() {
   }, []);
 
   const handleSelectionChange = useCallback((unit) => {
-    setSelectedUnit(unit);
+    const current = battleRef.current;
+    if (presentationBusyRef.current) {
+      setSelectedUnitId(unit.id);
+      return;
+    }
+    if (current.pendingAction?.action === "shoot") {
+      const outcome = resolveShoot(current, {
+        shooterId: current.pendingAction.unitId,
+        targetId: unit.id,
+      });
+      if (outcome.accepted) {
+        const hit = outcome.hit;
+        setPresentationBusy(true);
+        setSelectedUnitId(unit.id);
+        setBattle({
+          ...current,
+          units: current.units.map((candidate) => {
+            if (candidate.id === current.pendingAction.unitId) {
+              return { ...candidate, activity: "shooting" };
+            }
+            if (candidate.id === unit.id && hit) {
+              return { ...candidate, activity: "taking-damage" };
+            }
+            return candidate;
+          }),
+        });
+        setShotPresentation({
+          shooterId: current.pendingAction.unitId,
+          targetId: unit.id,
+          hit: outcome.hit,
+          damage: outcome.damage,
+          finalState: outcome.state,
+        });
+        return;
+      }
+    }
+    if (
+      current.pendingAction &&
+      current.pendingAction.unitId !== unit.id &&
+      unit.team === "player"
+    ) {
+      const cancellation = dispatchBattleCommand(current, {
+        type: "CANCEL_ACTION",
+        selectedUnitId: unit.id,
+      });
+      if (cancellation.accepted) {
+        setBattle(cancellation.state);
+      }
+    }
+    setSelectedUnitId(unit.id);
   }, []);
+
+  const selectedUnit = getUnitInspection(battle, selectedUnitId);
+  const selectedActions = new Set(
+    presentationBusy ? [] : selectedUnit?.availableActions ?? [],
+  );
+  const battleUnits = new Map(battle.units.map((unit) => [unit.id, unit]));
+  battleRef.current = battle;
+  presentationBusyRef.current = presentationBusy;
+  const movementDestinations =
+    battle.pendingAction?.action === "move" && !presentationBusy
+      ? getReachableDestinations(battle, battle.pendingAction.unitId)
+      : [];
+  const overwatchUnit = battle.pendingAction?.action === "overwatch"
+    ? battleUnits.get(battle.pendingAction.unitId)
+    : null;
+  const overwatchPreview = overwatchUnit && battle.pendingAction.targetCell
+    ? {
+        originCell: overwatchUnit.cell,
+        targetCell: battle.pendingAction.targetCell,
+      }
+    : null;
+  const committedOverwatchPreviews = useMemo(() => battle.units
+    .filter((unit) => unit.overwatch)
+    .map((unit) => ({
+      unitId: unit.id,
+      originCell: unit.overwatch.originCell,
+      targetCell: unit.overwatch.targetCell,
+      range: unit.overwatch.range,
+      halfAngle: unit.overwatch.halfAngle,
+    })), [battle.units]);
+  const attackPreviews = new Map();
+  if (battle.pendingAction?.action === "shoot" && !presentationBusy) {
+    for (const unit of battle.units) {
+      if (unit.team !== battleUnits.get(battle.pendingAction.unitId)?.team) {
+        attackPreviews.set(
+          unit.id,
+          getAttackPreview(battle, battle.pendingAction.unitId, unit.id),
+        );
+      }
+    }
+  }
+
+  const beginAction = (action) => {
+    if (!selectedUnit || !selectedActions.has(action)) {
+      return;
+    }
+
+    const outcome = dispatchBattleCommand(battle, {
+      type: "BEGIN_ACTION",
+      unitId: selectedUnit.id,
+      action,
+    });
+    if (outcome.accepted) {
+      setBattle(outcome.state);
+    }
+  };
+
+  const applyCommand = useCallback((command) => {
+    setBattle((current) => dispatchBattleCommand(current, command).state);
+  }, []);
+
+  const restartBattle = useCallback(() => {
+    const restarted = dispatchBattleCommand(battleRef.current, {
+      type: "RESTART",
+    }).state;
+    setMovePresentation(null);
+    setShotPresentation(null);
+    setEnemyIntent(null);
+    setPresentationBusy(false);
+    setSelectedUnitId(restarted.selectedUnitId);
+    setBattle(restarted);
+  }, []);
+
+  const handleCellSelect = useCallback((cell) => {
+    const current = battleRef.current;
+    if (current.pendingAction?.action === "overwatch") {
+      const aimed = dispatchBattleCommand(current, {
+        type: "AIM_OVERWATCH",
+        unitId: current.pendingAction.unitId,
+        targetCell: cell,
+      });
+      if (aimed.accepted) {
+        setBattle(aimed.state);
+      }
+      return;
+    }
+    if (current.pendingAction?.action !== "move") {
+      return;
+    }
+    const outcome = resolveMoveWithOverwatch(current, {
+      unitId: current.pendingAction.unitId,
+      destination: cell,
+    });
+    if (outcome.accepted) {
+      setPresentationBusy(true);
+      setMovePresentation({
+        unitId: current.pendingAction.unitId,
+        path: outcome.path,
+        finalState: outcome.state,
+      });
+    }
+  }, []);
+
+  const handleMoveStep = useCallback((unitId, cell) => {
+    playSound("step");
+    setBattle((current) => ({
+      ...current,
+      units: current.units.map((unit) =>
+        unit.id === unitId
+          ? { ...unit, cell: { ...cell }, activity: "moving" }
+          : unit,
+      ),
+    }));
+  }, [playSound]);
+
+  const handleMoveComplete = useCallback((finalState) => {
+    setBattle(finalState);
+    setMovePresentation(null);
+    setEnemyIntent(null);
+    setPresentationBusy(false);
+  }, []);
+
+  const handleShotComplete = useCallback((finalState) => {
+    setBattle(finalState);
+    setShotPresentation(null);
+    setEnemyIntent(null);
+    setPresentationBusy(false);
+  }, []);
+
+  const handlePresentationSettled = useCallback(() => {
+    setPresentationBusy(false);
+  }, []);
+
+  useEffect(() => {
+    if (
+      battle.phase !== "enemy" ||
+      !battle.activeUnitId ||
+      battle.result ||
+      presentationBusy ||
+      loadState.status !== "ready"
+    ) {
+      return undefined;
+    }
+
+    const plan = chooseEnemyPlan(battle) ?? {
+      unitId: battle.activeUnitId,
+      action: "relinquish",
+      cost: 0,
+      reason: "activation-complete",
+    };
+    setEnemyIntent({
+      unitId: plan.unitId,
+      action: plan.action,
+      cost: plan.cost,
+      targetId: plan.targetId ?? null,
+      destination: plan.destination ?? null,
+    });
+
+    const timeout = window.setTimeout(() => {
+      const current = battleRef.current;
+      if (
+        current.phase !== "enemy" ||
+        current.activeUnitId !== plan.unitId ||
+        current.result ||
+        presentationBusyRef.current
+      ) {
+        return;
+      }
+
+      if (plan.action === "move") {
+        const outcome = resolveMoveWithOverwatch(current, {
+          unitId: plan.unitId,
+          destination: plan.destination,
+        });
+        if (outcome.accepted) {
+          setPresentationBusy(true);
+          setBattle({
+            ...current,
+            units: current.units.map((unit) =>
+              unit.id === plan.unitId
+                ? { ...unit, activity: "moving" }
+                : unit,
+            ),
+          });
+          setMovePresentation({
+            unitId: plan.unitId,
+            path: outcome.path,
+            finalState: outcome.state,
+          });
+          return;
+        }
+      } else if (plan.action === "shoot") {
+        const outcome = resolveShoot(current, {
+          shooterId: plan.unitId,
+          targetId: plan.targetId,
+        });
+        if (outcome.accepted) {
+          setPresentationBusy(true);
+          setBattle({
+            ...current,
+            units: current.units.map((unit) => {
+              if (unit.id === plan.unitId) {
+                return { ...unit, activity: "shooting" };
+              }
+              if (unit.id === plan.targetId && outcome.hit) {
+                return { ...unit, activity: "taking-damage" };
+              }
+              return unit;
+            }),
+          });
+          setShotPresentation({
+            shooterId: plan.unitId,
+            targetId: plan.targetId,
+            hit: outcome.hit,
+            damage: outcome.damage,
+            finalState: outcome.state,
+          });
+          return;
+        }
+      } else if (plan.action === "overwatch") {
+        const outcome = resolveEnemyOverwatch(current, plan);
+        if (outcome.accepted) {
+          playSound("overwatch");
+          setBattle(outcome.state);
+          return;
+        }
+      }
+
+      setBattle(dispatchBattleCommand(current, {
+          type: "RELINQUISH_ACTIVE_ENEMY",
+        }).state);
+      setEnemyIntent(null);
+    }, 520);
+
+    return () => window.clearTimeout(timeout);
+  }, [battle, loadState.status, playSound, presentationBusy]);
 
   const scenePortal = useMemo(() => {
     if (!contentLayer) {
@@ -201,14 +830,27 @@ export function App() {
 
     return createPortal(
       <GameScene
+        battle={battle}
+        committedOverwatchPreviews={committedOverwatchPreviews}
+        enemyIntent={enemyIntent}
         inputEnabled={!portraitBlocked}
+        movePresentation={movePresentation}
+        movementDestinations={movementDestinations}
+        onCellSelect={handleCellSelect}
         onLoadingChange={handleLoadingChange}
+        onMoveComplete={handleMoveComplete}
+        onMoveStep={handleMoveStep}
+        onPresentationSettled={handlePresentationSettled}
         onProjectedHudPositions={handleHudPositions}
         onSelectionChange={handleSelectionChange}
+        onShotComplete={handleShotComplete}
+        overwatchPreview={overwatchPreview}
+        selectedUnitId={selectedUnitId}
+        shotPresentation={shotPresentation}
       />,
       contentLayer,
     );
-  }, [contentLayer, handleHudPositions, handleLoadingChange, handleSelectionChange, portraitBlocked]);
+  }, [battle, committedOverwatchPreviews, contentLayer, enemyIntent, handleCellSelect, handleHudPositions, handleLoadingChange, handleMoveComplete, handleMoveStep, handlePresentationSettled, handleSelectionChange, handleShotComplete, movePresentation, movementDestinations, overwatchPreview, portraitBlocked, selectedUnitId, shotPresentation]);
 
   useEffect(() => {
     const uiLayer = document.getElementById("ui_layer");
@@ -252,8 +894,6 @@ export function App() {
     }
   };
 
-  const ignorePresentationAction = () => {};
-
   return (
     <>
       {scenePortal}
@@ -275,28 +915,85 @@ export function App() {
           </a>
         </div>
 
-        <div className="turn-banner">PLAYER TURN</div>
+        <div className="turn-banner">
+          {battle.phase === "enemy" ? "ENEMY TURN" : battle.phase === "result" ? "BATTLE OVER" : "PLAYER TURN"}
+        </div>
+        {battle.phase === "enemy" && enemyIntent ? (
+          <div className="enemy-intent" role="status">
+            {battleUnits.get(enemyIntent.unitId)?.label ?? "Enemy"}: {enemyIntent.action.toUpperCase()}
+            {enemyIntent.cost > 0 ? ` (${enemyIntent.cost} AP)` : ""}
+          </div>
+        ) : null}
         <InspectionPanel unit={selectedUnit} />
 
         <div className="world-hud" aria-hidden={loadState.status !== "ready"}>
-          {hudPositions.map((unit) => <UnitHud key={unit.id} unit={unit} />)}
+          {hudPositions.map((projectedUnit) => {
+            const battleUnit = battleUnits.get(projectedUnit.id);
+            if (!battleUnit) {
+              return null;
+            }
+
+            return (
+              <UnitHud
+                key={projectedUnit.id}
+                active={battle.activeUnitId === projectedUnit.id}
+                attackPreview={attackPreviews.get(projectedUnit.id)}
+                selected={selectedUnitId === projectedUnit.id}
+                unit={{
+                  ...projectedUnit,
+                  ...battleUnit,
+                  status: getUnitInspection(battle, projectedUnit.id).status,
+                  overwatch: battleUnit.overwatch,
+                }}
+              />
+            );
+          })}
         </div>
 
         <nav className="action-bar" aria-label="Tactical actions">
-          {actionControls.map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              type="button"
-              className="action-button"
-              aria-disabled="true"
-              data-action={id}
-              title={`${label} is available in the gameplay milestone`}
-              onClick={ignorePresentationAction}
-            >
-              <Icon size={27} strokeWidth={2} />
-              <span>{label}</span>
-            </button>
-          ))}
+          {actionControls.map(({ id, label, Icon }) => {
+            const enabled = id === "end-turn"
+              ? battle.phase === "player" && battle.result === null && battle.pendingConfirmation === null && !presentationBusy
+              : selectedActions.has(id);
+            const active = battle.pendingAction?.action === id;
+            const displayLabel = id === "shoot" && selectedUnit
+              ? `${label} ${WEAPON_DEFINITIONS[selectedUnit.weaponId]?.apCost ?? 0} AP`
+              : id === "overwatch" && selectedUnit
+                ? `${label} ${selectedUnit.actionPoints} AP`
+              : label;
+
+            return (
+              <button
+                key={id}
+                type="button"
+                className={`action-button${active ? " action-button_active" : ""}`}
+                aria-disabled={!enabled}
+                disabled={!enabled}
+                data-action={id}
+                title={enabled ? displayLabel : `${displayLabel} unavailable`}
+                onClick={() => {
+                  if (id === "end-turn") {
+                    applyCommand({ type: "REQUEST_END_TURN" });
+                  } else if (
+                    id === "overwatch" &&
+                    battle.pendingAction?.action === "overwatch" &&
+                    battle.pendingAction?.unitId === selectedUnit?.id
+                  ) {
+                    playSound("overwatch");
+                    applyCommand({
+                      type: "CONFIRM_OVERWATCH",
+                      unitId: selectedUnit.id,
+                    });
+                  } else {
+                    beginAction(id);
+                  }
+                }}
+              >
+                <Icon size={27} strokeWidth={2} />
+                <span>{displayLabel}</span>
+              </button>
+            );
+          })}
         </nav>
 
         <div className="corner corner_bottom_left">
@@ -314,6 +1011,20 @@ export function App() {
               <span>Fullscreen</span>
               {fullscreenPreferred ? <CheckSquare2 size={14} /> : <Square size={14} />}
             </button>
+            <button
+              id="mute_toggle"
+              className="corner_body settings_option"
+              type="button"
+              aria-pressed={muted}
+              tabIndex={-1}
+              onClick={() => {
+                setMuted(audioRef.current.setMuted(!muted));
+              }}
+            >
+              {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+              <span>Mute</span>
+              {muted ? <CheckSquare2 size={14} /> : <Square size={14} />}
+            </button>
           </section>
         </div>
 
@@ -329,6 +1040,48 @@ export function App() {
             <RotateCcw size={22} />
             <strong>Battlefield unavailable</strong>
             <span>{loadState.error}</span>
+          </div>
+        ) : null}
+
+        {battle.pendingConfirmation === "end-turn" ? (
+          <div className="confirmation-backdrop">
+            <section className="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="end_turn_title">
+              <strong id="end_turn_title">Are you sure?</strong>
+              <span>Your squad still has action points remaining.</span>
+              <div className="confirmation-actions">
+                <button type="button" onClick={() => applyCommand({ type: "CANCEL_END_TURN" })}>
+                  Cancel
+                </button>
+                <button type="button" className="confirmation-primary" onClick={() => applyCommand({ type: "CONFIRM_END_TURN" })}>
+                  End Turn
+                </button>
+              </div>
+            </section>
+          </div>
+        ) : null}
+
+        {battle.result ? (
+          <div className="confirmation-backdrop result-backdrop">
+            <section
+              className="confirmation-dialog result-dialog"
+              role="dialog"
+              aria-labelledby="battle_result_title"
+            >
+              <strong id="battle_result_title">
+                {battle.result === "victory" ? "Victory" : "Defeat"}
+              </strong>
+              <span>
+                {battle.result === "victory"
+                  ? "All enemies have been eliminated."
+                  : "Your squad has been eliminated."}
+              </span>
+              <div className="confirmation-actions">
+                <button type="button" className="confirmation-primary" onClick={restartBattle}>
+                  <RotateCcw size={16} />
+                  Restart
+                </button>
+              </div>
+            </section>
           </div>
         ) : null}
 

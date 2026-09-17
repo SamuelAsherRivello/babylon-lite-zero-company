@@ -6,6 +6,11 @@ import {
   CHARACTER_MODEL_RELATIVE_PATH,
   createPresentationDescriptors,
 } from "../src/game/descriptors.js";
+import {
+  createInitialBattle,
+  dispatchBattleCommand,
+  getUnitInspection,
+} from "../src/game/rules/index.js";
 
 const appRoot = new URL("../", import.meta.url);
 
@@ -61,7 +66,7 @@ test("uses a disposable scene lifecycle with local asset failure handling", asyn
   assert.match(lifecycle, /if \(disposed\)/);
 });
 
-test("renders the complete nonfunctional tactical interface", async () => {
+test("renders the live tactical interface", async () => {
   const page = await readAppFile("index.html");
   const app = await readAppFile("src/App.jsx");
   const styles = await readAppFile("src/style.css");
@@ -73,12 +78,51 @@ test("renders the complete nonfunctional tactical interface", async () => {
   for (const action of ["Move", "Shoot", "Overwatch", "End Turn"]) {
     assert.match(app, new RegExp(`label: "${action}"`));
   }
-  assert.match(app, /aria-disabled="true"/);
-  assert.match(app, /const ignorePresentationAction = \(\) => \{\};/);
+  assert.match(app, /createInitialBattle/);
+  assert.match(app, /getUnitInspection/);
+  assert.match(app, /aria-disabled=\{!enabled\}/);
+  assert.match(app, /disabled=\{!enabled\}/);
+  assert.match(app, /<dt>Status<\/dt>/);
+  assert.match(app, /<dt>Actions<\/dt>/);
   assert.match(app, /className="unit-health"/);
   assert.match(app, /className="ap-dots"/);
   assert.match(app, /aria-label="Overwatch"/);
   assert.match(styles, /grid-template-columns: repeat\(4, 78px\)/);
+});
+
+test("keeps every unit inspectable across phases and terminal state", () => {
+  const opening = createInitialBattle({ seed: 123 });
+  const playerInspections = opening.units.map((unit) =>
+    getUnitInspection(opening, unit.id),
+  );
+  assert.equal(playerInspections.filter(Boolean).length, 6);
+  assert.deepEqual(playerInspections[0].availableActions, ["move", "shoot", "overwatch"]);
+  assert.deepEqual(playerInspections[3].availableActions, []);
+
+  const requested = dispatchBattleCommand(opening, { type: "REQUEST_END_TURN" });
+  const enemyTurn = dispatchBattleCommand(requested.state, { type: "CONFIRM_END_TURN" }).state;
+  const enemyInspections = enemyTurn.units.map((unit) =>
+    getUnitInspection(enemyTurn, unit.id),
+  );
+  assert.equal(enemyInspections.filter(Boolean).length, 6);
+  assert.ok(enemyInspections.every((unit) => unit.availableActions.length === 0));
+
+  const terminal = {
+    ...enemyTurn,
+    phase: "result",
+    result: "defeat",
+    units: enemyTurn.units.map((unit) =>
+      unit.id === "player-1"
+        ? { ...unit, health: 0, activity: "taking-damage" }
+        : unit,
+    ),
+  };
+  const terminalInspections = terminal.units.map((unit) =>
+    getUnitInspection(terminal, unit.id),
+  );
+  assert.equal(terminalInspections.filter(Boolean).length, 6);
+  assert.equal(getUnitInspection(terminal, "player-1").status, "Dead");
+  assert.ok(terminalInspections.every((unit) => unit.availableActions.length === 0));
 });
 
 test("preserves the four corner roles and release version", async () => {

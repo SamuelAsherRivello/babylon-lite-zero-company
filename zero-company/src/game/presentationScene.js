@@ -12,6 +12,7 @@ import {
   Vector3,
   VertexData,
 } from "@babylonjs/core";
+import { cellToWorld, OVERWATCH_PROFILE } from "./rules/index.js";
 
 const COLORS = Object.freeze({
   arena: Color3.FromHexString("#707574"),
@@ -21,6 +22,8 @@ const COLORS = Object.freeze({
   cyan: Color3.FromHexString("#35e6f4"),
   yellow: Color3.FromHexString("#ffd43b"),
   selection: Color3.FromHexString("#49f2ff"),
+  moveTwo: Color3.FromHexString("#69d391"),
+  moveThree: Color3.FromHexString("#ffd43b"),
 });
 
 function createStandardMaterial(scene, name, color, options = {}) {
@@ -47,6 +50,18 @@ export function createPresentationMaterials(scene) {
     movement: createStandardMaterial(scene, "material-movement-preview", COLORS.cyan, {
       alpha: 0.3,
       emissiveColor: COLORS.cyan.scale(0.48),
+      disableLighting: true,
+      backFaceCulling: false,
+    }),
+    movementTwo: createStandardMaterial(scene, "material-movement-preview-two", COLORS.moveTwo, {
+      alpha: 0.34,
+      emissiveColor: COLORS.moveTwo.scale(0.45),
+      disableLighting: true,
+      backFaceCulling: false,
+    }),
+    movementThree: createStandardMaterial(scene, "material-movement-preview-three", COLORS.moveThree, {
+      alpha: 0.32,
+      emissiveColor: COLORS.moveThree.scale(0.42),
       disableLighting: true,
       backFaceCulling: false,
     }),
@@ -103,7 +118,7 @@ export function createLitArena(scene, descriptors, materials) {
   arena.position.y = 0;
   arena.material = materials.arena;
   arena.receiveShadows = true;
-  arena.isPickable = false;
+  arena.isPickable = true;
   arena.metadata = { kind: "arena" };
 
   const covers = descriptors.covers.map((descriptor) => {
@@ -213,9 +228,109 @@ function createOverwatchCone(scene, descriptors, material) {
 export function createStaticFeedback(scene, descriptors, materials) {
   return {
     movementCells: createMovementCells(scene, descriptors, materials.movement),
-    shot: createShotFeedback(scene, descriptors, materials.glowCyan),
-    overwatchCone: createOverwatchCone(scene, descriptors, materials.overwatch),
+    shot: descriptors.feedback.shot
+      ? createShotFeedback(scene, descriptors, materials.glowCyan)
+      : null,
+    overwatchCone: descriptors.feedback.overwatch
+      ? createOverwatchCone(scene, descriptors, materials.overwatch)
+      : null,
   };
+}
+
+export function createMovementPreviewController(scene, materials) {
+  let meshes = [];
+
+  function clear() {
+    for (const mesh of meshes) {
+      mesh.dispose();
+    }
+    meshes = [];
+  }
+
+  function setDestinations(destinations) {
+    clear();
+    meshes = destinations.map((destination) => {
+      const world = cellToWorld(destination.cell);
+      const mesh = MeshBuilder.CreateGround(
+        `move-destination-${destination.cell.column}-${destination.cell.row}`,
+        { width: 0.92, height: 0.92 },
+        scene,
+      );
+      mesh.position = new Vector3(world.x, world.y + 0.018, world.z);
+      mesh.material = destination.minimumActionPoints === 1
+        ? materials.movement
+        : destination.minimumActionPoints === 2
+          ? materials.movementTwo
+          : materials.movementThree;
+      mesh.isPickable = true;
+      mesh.enableEdgesRendering();
+      mesh.edgesColor = new Color4(1, 1, 1, 0.72);
+      mesh.edgesWidth = 1.5;
+      mesh.metadata = {
+        kind: "move-destination",
+        cell: { ...destination.cell },
+        minimumActionPoints: destination.minimumActionPoints,
+      };
+      return mesh;
+    });
+  }
+
+  return { clear, setDestinations };
+}
+
+export function createOverwatchPreviewController(scene, material) {
+  let cones = [];
+
+  function clear() {
+    for (const cone of cones) {
+      cone.dispose();
+    }
+    cones = [];
+  }
+
+  function setPreviews(previews) {
+    clear();
+    for (const preview of previews) {
+      if (!preview?.targetCell) {
+        continue;
+      }
+      const origin = cellToWorld(preview.originCell);
+      const target = cellToWorld(preview.targetCell);
+      const length = Math.hypot(target.x - origin.x, target.z - origin.z) || 1;
+      cones.push(createOverwatchCone(
+        scene,
+        {
+          feedback: {
+            overwatch: {
+              origin: [origin.x, origin.y + 0.02, origin.z],
+              direction: [(target.x - origin.x) / length, 0, (target.z - origin.z) / length],
+              range: preview.range ?? OVERWATCH_PROFILE.range,
+              halfAngle: preview.halfAngle ?? OVERWATCH_PROFILE.halfAngle,
+            },
+          },
+        },
+        material,
+      ));
+    }
+  }
+
+  function setPreview(preview) {
+    setPreviews(preview ? [preview] : []);
+  }
+
+  function getTipWorld() {
+    const cone = cones[0];
+    if (!cone) {
+      return null;
+    }
+    cone.computeWorldMatrix(true);
+    return Vector3.TransformCoordinates(
+      new Vector3(0, 0, OVERWATCH_PROFILE.range),
+      cone.getWorldMatrix(),
+    );
+  }
+
+  return { clear, getTipWorld, setPreview, setPreviews };
 }
 
 function getHierarchyBounds(meshes) {
@@ -360,6 +475,10 @@ export function createUnitsFromTemplate({
       throw new Error(`Unable to clone the character model for ${descriptor.id}.`);
     }
     model.setEnabled(true);
+    if (model.rotationQuaternion) {
+      model.rotationQuaternion.toEulerAnglesToRef(model.rotation);
+      model.rotationQuaternion = null;
+    }
     replaceInstancesWithConcreteMeshes(model, descriptor.id);
 
     const meshes = model.getChildMeshes(false);
@@ -379,8 +498,11 @@ export function createUnitsFromTemplate({
       throw new Error(`Character clone ${descriptor.id} still contains instanced meshes.`);
     }
 
+    const unitMaterial = (
+      descriptor.team === "player" ? materials.player : materials.enemy
+    ).clone(`material-unit-${descriptor.id}`);
     for (const mesh of meshes) {
-      mesh.material = descriptor.team === "player" ? materials.player : materials.enemy;
+      mesh.material = unitMaterial;
       mesh.receiveShadows = true;
       shadows.addShadowCaster(mesh);
     }
@@ -394,8 +516,122 @@ export function createUnitsFromTemplate({
     hudAnchor.position = new Vector3(0, descriptors.model.displayHeight + 0.34, 0);
     hudAnchor.metadata = { kind: "hud-anchor", unitId: descriptor.id };
 
-    return { descriptor, container, model, meshes, selectionRing, hudAnchor };
+    return {
+      descriptor,
+      container,
+      model,
+      meshes,
+      selectionRing,
+      hudAnchor,
+      material: unitMaterial,
+      baseModelPosition: model.position.clone(),
+      baseModelRotation: model.rotation.clone(),
+      baseModelScaling: model.scaling.clone(),
+    };
   });
+}
+
+function presentationStatus(unit) {
+  if (unit.health <= 0) {
+    return "dead";
+  }
+  if (unit.activity === "taking-damage") {
+    return "taking-damage";
+  }
+  if (unit.activity === "moving") {
+    return "moving";
+  }
+  if (unit.activity === "shooting") {
+    return "shooting";
+  }
+  if (unit.overwatch) {
+    return "overwatch";
+  }
+  return "idle";
+}
+
+export function createUnitStateAnimator(scene, units) {
+  const states = new Map(
+    units.map((unit) => [unit.descriptor.id, { status: "idle", overwatch: null }]),
+  );
+  let elapsed = 0;
+
+  const observer = scene.onBeforeRenderObservable.add(() => {
+    elapsed += scene.getEngine().getDeltaTime() / 1000;
+    for (let index = 0; index < units.length; index += 1) {
+      const unit = units[index];
+      const state = states.get(unit.descriptor.id);
+      const phase = elapsed * 2.2 + index * 0.72;
+      unit.model.position.copyFrom(unit.baseModelPosition);
+      unit.model.rotation.copyFrom(unit.baseModelRotation);
+      unit.model.scaling.copyFrom(unit.baseModelScaling);
+      unit.material.emissiveColor.copyFromFloats(0, 0, 0);
+
+      if (state.status === "dead") {
+        unit.model.rotation.z = -1.42;
+        unit.model.position.y = unit.baseModelPosition.y + 0.04;
+        unit.model.scaling.y *= 0.96;
+        continue;
+      }
+      if (state.status === "taking-damage") {
+        unit.model.position.x += Math.sin(elapsed * 68) * 0.055;
+        unit.model.rotation.z = Math.sin(elapsed * 52) * 0.08;
+        unit.material.emissiveColor.copyFromFloats(0.9, 0.12, 0.08);
+        continue;
+      }
+      if (state.status === "moving") {
+        unit.model.position.y += Math.abs(Math.sin(elapsed * 13)) * 0.09;
+        unit.model.rotation.z = Math.sin(elapsed * 13) * 0.035;
+        continue;
+      }
+      if (state.status === "shooting") {
+        unit.model.position.z -= 0.08 + Math.sin(elapsed * 28) * 0.025;
+        unit.model.rotation.x = -0.045;
+        unit.material.emissiveColor.copyFromFloats(0.12, 0.18, 0.2);
+        continue;
+      }
+      if (state.status === "overwatch") {
+        unit.model.position.y += Math.sin(phase * 1.4) * 0.018;
+        unit.model.rotation.y = Math.sin(phase * 1.8) * 0.025;
+        continue;
+      }
+
+      unit.model.position.y += Math.sin(phase) * 0.025;
+      unit.model.rotation.z = Math.sin(phase * 0.7) * 0.009;
+    }
+  });
+
+  return {
+    sync(battleState) {
+      for (const stateUnit of battleState.units) {
+        const unit = units.find((candidate) => candidate.descriptor.id === stateUnit.id);
+        if (!unit) {
+          continue;
+        }
+        states.set(stateUnit.id, {
+          status: presentationStatus(stateUnit),
+          overwatch: stateUnit.overwatch,
+        });
+        if (stateUnit.overwatch?.direction) {
+          unit.container.rotation.y = Math.atan2(
+            stateUnit.overwatch.direction.column,
+            stateUnit.overwatch.direction.row,
+          );
+        }
+      }
+    },
+    snapshot() {
+      return units.map((unit) => ({
+        id: unit.descriptor.id,
+        status: states.get(unit.descriptor.id)?.status ?? "idle",
+        modelPosition: unit.model.position.asArray(),
+        modelRotation: unit.model.rotation.asArray(),
+      }));
+    },
+    dispose() {
+      scene.onBeforeRenderObservable.remove(observer);
+    },
+  };
 }
 
 export function createProjectedHudReporter({

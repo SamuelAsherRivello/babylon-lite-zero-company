@@ -28,6 +28,23 @@ Exactly three subagents completed the required research round:
   Agent 3 does not implement fixes or edit task checkboxes. The main agent
   records each decision in `approval-log.md`.
 
+## Milestone 2 Ownership
+
+- **Main agent:** exclusive ownership of React and Babylon integration,
+  browser verification, project documentation, and the OpenSpec task ledger.
+- **Agent 1 - gameplay rules:** exclusive ownership of pure gameplay rules,
+  grid and pathing, combat resolution, enemy AI, and focused rule tests under
+  `zero-company/src/game/rules/` and `zero-company/test/rules/`.
+- **Agent 2 - assets:** exclusive ownership of local presentation assets under
+  `zero-company/public/assets/` and their provenance record in
+  `zero-company/documentation/assets.md`.
+- **Agent 3 - verifier:** entirely read-only approval authority for each task
+  and checkpoint. Agent 3 does not edit implementation, evidence, planning
+  artifacts, or task checkboxes.
+
+These ownership boundaries are disjoint. Each implementer must leave files
+owned by the other roles unchanged.
+
 ## Approval Protocol
 
 1. The responsible implementer supplies the relevant diff and focused evidence.

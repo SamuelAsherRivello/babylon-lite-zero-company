@@ -32,6 +32,7 @@ export function createCameraController({
   camera,
   cameraDescriptor,
   focusUnit,
+  onWorldPick = () => {},
   onCameraChange = () => {},
 }) {
   const pointers = new Map();
@@ -125,21 +126,21 @@ export function createCameraController({
     notifyCameraChange();
   }
 
-  function pickUnit(clientX, clientY) {
+  function pickWorld(clientX, clientY) {
     const bounds = canvas.getBoundingClientRect();
     if (bounds.width <= 0 || bounds.height <= 0) {
       return;
     }
 
-    const pick = scene.pick(
-      clientX - bounds.left,
-      clientY - bounds.top,
-      (mesh) => Boolean(findUnitId(mesh)),
-    );
+    const pick = scene.pick(clientX - bounds.left, clientY - bounds.top);
     const unitId = pick?.hit ? findUnitId(pick.pickedMesh) : null;
 
     if (unitId) {
       focusUnit(unitId);
+      return;
+    }
+    if (pick?.hit) {
+      onWorldPick(pick);
     }
   }
 
@@ -226,7 +227,7 @@ export function createCameraController({
       ((pointer.pointerType === "mouse" && pointer.button === 0) ||
         pointer.pointerType === "touch")
     ) {
-      pickUnit(event.clientX, event.clientY);
+      pickWorld(event.clientX, event.clientY);
     }
 
     if (pointer.pointerType === "touch") {
