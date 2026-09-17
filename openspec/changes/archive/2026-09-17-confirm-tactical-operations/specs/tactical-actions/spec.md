@@ -1,11 +1,4 @@
-# Tactical Actions Specification
-
-## Purpose
-
-Define the mutually distinct Move, Shoot, and Overwatch actions, including
-cost selection, targeting, range effects, line of sight, and reaction fire.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Move exposes AP-tiered destination squares
 
@@ -89,40 +82,6 @@ long-range weapon.
 - **THEN** one attack resolves against that enemy, the required AP is spent,
   and the shooter does not move
 
-### Requirement: Weapons use distance-scaled hit probability and damage
-
-The three player operatives SHALL carry three fixed archetypes: short-range,
-balanced, and long-range. Each weapon SHALL define maximum hit probability and
-maximum damage at adjacent range. Both values SHALL decrease as the distance
-between grid-cell centers increases in Euclidean world distance according to
-deterministic, testable curves appropriate to that archetype. A hit SHALL never
-exceed the probability or damage displayed before confirmation.
-
-#### Scenario: Adjacent target receives maximum values
-
-- **WHEN** a shooter evaluates an adjacent enemy with clear line of sight
-- **THEN** the preview shows that weapon's maximum hit probability and maximum
-  damage
-
-#### Scenario: More distant target receives lower values
-
-- **WHEN** the same weapon evaluates a farther enemy with clear line of sight
-- **THEN** its displayed hit probability and maximum damage are both lower
-  than the adjacent values
-
-### Requirement: Shooting requires line of sight
-
-A target without an unobstructed line from shooter to target SHALL have zero
-hit probability and SHALL not be selectable for Shoot. The preview SHALL state
-that line of sight is blocked. Only level obstacles block LOS; living and dead
-characters do not.
-
-#### Scenario: Cover blocks line of sight
-
-- **WHEN** any of the level's full-height cover obstacles intersects the line
-  between shooter and target
-- **THEN** the target shows zero hit probability and cannot be confirmed
-
 ### Requirement: Overwatch consumes remaining AP and requires confirmation
 
 Selecting Overwatch with at least one AP SHALL preview a ground-plane cone and
@@ -152,35 +111,6 @@ until its next player turn. Pressing Overwatch again SHALL NOT commit the cone.
 - **WHEN** a valid Overwatch cone is staged and the player presses Overwatch
   again
 - **THEN** no AP is spent and no Overwatch commitment is created
-
-### Requirement: Overwatch fires only on qualifying opponent movement
-
-A committed Overwatch unit SHALL fire only during the opposing side's turn.
-After each completed center-to-center movement step, the mover's new cell center
-SHALL be tested against the cone on the ground plane and against obstacle-only
-line of sight. Both tests MUST pass. The unit SHALL make at most one reaction
-shot per AP consumed at commitment, decrementing its remaining shot allowance
-after each reaction. Overwatch SHALL expire at the start of the unit's next
-side turn.
-
-#### Scenario: Opponent enters a cone with clear line of sight
-
-- **WHEN** an opponent completes a movement step with its cell center inside an
-  opposing Overwatch cone and no cover blocks line of sight
-- **THEN** one reaction attack may resolve and one committed shot is consumed
-
-#### Scenario: Cone entry is hidden by cover
-
-- **WHEN** an opponent's cell center enters the cone but a cover block
-  intersects line of sight
-- **THEN** Overwatch does not fire and its remaining shot allowance is unchanged
-
-#### Scenario: Opponent never enters the cone
-
-- **WHEN** opposing units complete their turn without entering the committed
-  cone with line of sight
-- **THEN** the Overwatch unit does not shoot and its state expires at the start
-  of its next side turn
 
 ### Requirement: Player action modes are cancelable before commitment
 

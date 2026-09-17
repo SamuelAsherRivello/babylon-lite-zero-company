@@ -633,33 +633,20 @@ export function App() {
       return;
     }
     if (current.pendingAction?.action === "shoot") {
-      const outcome = resolveShoot(current, {
-        shooterId: current.pendingAction.unitId,
-        targetId: unit.id,
-      });
-      if (outcome.accepted) {
-        const hit = outcome.hit;
-        setPresentationBusy(true);
-        setSelectedUnitId(unit.id);
-        setBattle({
-          ...current,
-          units: current.units.map((candidate) => {
-            if (candidate.id === current.pendingAction.unitId) {
-              return { ...candidate, activity: "shooting" };
-            }
-            if (candidate.id === unit.id && hit) {
-              return { ...candidate, activity: "taking-damage" };
-            }
-            return candidate;
-          }),
-        });
-        setShotPresentation({
-          shooterId: current.pendingAction.unitId,
+      const shooter = current.units.find(
+        (candidate) => candidate.id === current.pendingAction.unitId,
+      );
+      if (unit.team === shooter?.team) {
+        // Friendly selection falls through to the existing action-cancellation path.
+      } else {
+        const aimed = dispatchBattleCommand(current, {
+          type: "AIM_SHOOT",
+          unitId: current.pendingAction.unitId,
           targetId: unit.id,
-          hit: outcome.hit,
-          damage: outcome.damage,
-          finalState: outcome.state,
         });
+        if (aimed.accepted) {
+          setBattle(aimed.state);
+        }
         return;
       }
     }
@@ -719,6 +706,15 @@ export function App() {
       }
     }
   }
+  const confirmationReady = battle.pendingConfirmation === "end-turn" || (
+    battle.pendingAction?.action === "move" && Boolean(battle.pendingAction.targetCell)
+  ) || (
+    battle.pendingAction?.action === "shoot" && Boolean(battle.pendingAction.targetId)
+  ) || (
+    battle.pendingAction?.action === "overwatch" &&
+    Boolean(battle.pendingAction.targetCell) &&
+    Boolean(battle.pendingAction.direction)
+  );
 
   const beginAction = (action) => {
     if (!selectedUnit || !selectedActions.has(action)) {
@@ -767,20 +763,94 @@ export function App() {
     if (current.pendingAction?.action !== "move") {
       return;
     }
-    const outcome = resolveMoveWithOverwatch(current, {
+    const aimed = dispatchBattleCommand(current, {
+      type: "AIM_MOVE",
       unitId: current.pendingAction.unitId,
-      destination: cell,
+      targetCell: cell,
     });
-    if (outcome.accepted) {
-      setPresentationBusy(true);
-      setMovePresentation({
-        unitId: current.pendingAction.unitId,
-        path: outcome.path,
-        reactions: outcome.reactions,
-        finalState: outcome.state,
-      });
+    if (aimed.accepted) {
+      setBattle(aimed.state);
     }
   }, []);
+
+  const confirmOperation = () => {
+    const current = battleRef.current;
+    if (current.pendingConfirmation === "end-turn") {
+      applyCommand({ type: "CONFIRM_END_TURN" });
+      return;
+    }
+
+    const pendingAction = current.pendingAction;
+    if (pendingAction?.action === "move" && pendingAction.targetCell) {
+      const outcome = resolveMoveWithOverwatch(current, {
+        unitId: pendingAction.unitId,
+        destination: pendingAction.targetCell,
+      });
+      if (outcome.accepted) {
+        setPresentationBusy(true);
+        setMovePresentation({
+          unitId: pendingAction.unitId,
+          path: outcome.path,
+          reactions: outcome.reactions,
+          finalState: outcome.state,
+        });
+      }
+      return;
+    }
+
+    if (pendingAction?.action === "shoot" && pendingAction.targetId) {
+      const outcome = resolveShoot(current, {
+        shooterId: pendingAction.unitId,
+        targetId: pendingAction.targetId,
+      });
+      if (outcome.accepted) {
+        const hit = outcome.hit;
+        setPresentationBusy(true);
+        setBattle({
+          ...current,
+          units: current.units.map((candidate) => {
+            if (candidate.id === pendingAction.unitId) {
+              return { ...candidate, activity: "shooting" };
+            }
+            if (candidate.id === pendingAction.targetId && hit) {
+              return { ...candidate, activity: "taking-damage" };
+            }
+            return candidate;
+          }),
+        });
+        setShotPresentation({
+          shooterId: pendingAction.unitId,
+          targetId: pendingAction.targetId,
+          hit: outcome.hit,
+          damage: outcome.damage,
+          finalState: outcome.state,
+        });
+      }
+      return;
+    }
+
+    if (pendingAction?.action === "overwatch" && pendingAction.targetCell) {
+      const outcome = dispatchBattleCommand(current, {
+        type: "CONFIRM_OVERWATCH",
+        unitId: pendingAction.unitId,
+      });
+      if (outcome.accepted) {
+        playSound("overwatch");
+        setBattle(outcome.state);
+      }
+    }
+  };
+
+  const cancelOperation = () => {
+    const current = battleRef.current;
+    const command = current.pendingConfirmation === "end-turn"
+      ? { type: "CANCEL_END_TURN" }
+      : { type: "CANCEL_ACTION" };
+    const outcome = dispatchBattleCommand(current, command);
+    if (outcome.accepted) {
+      setBattle(outcome.state);
+    }
+  };
 
   const handleMoveStep = useCallback((unitId, cell) => {
     playSound("step");
@@ -1067,10 +1137,30 @@ export function App() {
         </div>
 
         <nav className="action-bar" aria-label="Tactical actions">
+          {confirmationReady ? (
+            <div id="operation_confirmation" className="operation-confirmation">
+              <button
+                id="operation_confirm"
+                type="button"
+                className="operation-button operation-button_primary"
+                onClick={confirmOperation}
+              >
+                Confirm?
+              </button>
+              <button
+                id="operation_cancel"
+                type="button"
+                className="operation-button"
+                onClick={cancelOperation}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : null}
           {actionControls.map(({ id, label, Icon }) => {
             const enabled = id === "end-turn"
-              ? battle.phase === "player" && battle.result === null && battle.pendingConfirmation === null && !presentationBusy
-              : selectedActions.has(id);
+              ? !confirmationReady && battle.phase === "player" && battle.result === null && battle.pendingConfirmation === null && !presentationBusy
+              : !confirmationReady && selectedActions.has(id);
             const active = battle.pendingAction?.action === id;
             const displayLabel = id === "shoot" && selectedUnit
               ? `${label} ${WEAPON_DEFINITIONS[selectedUnit.weaponId]?.apCost ?? 0} AP`
@@ -1091,16 +1181,6 @@ export function App() {
                 onClick={() => {
                   if (id === "end-turn") {
                     applyCommand({ type: "REQUEST_END_TURN" });
-                  } else if (
-                    id === "overwatch" &&
-                    battle.pendingAction?.action === "overwatch" &&
-                    battle.pendingAction?.unitId === selectedUnit?.id
-                  ) {
-                    playSound("overwatch");
-                    applyCommand({
-                      type: "CONFIRM_OVERWATCH",
-                      unitId: selectedUnit.id,
-                    });
                   } else {
                     beginAction(id);
                   }
@@ -1157,23 +1237,6 @@ export function App() {
             <RotateCcw size={22} />
             <strong>Battlefield unavailable</strong>
             <span>{loadState.error}</span>
-          </div>
-        ) : null}
-
-        {battle.pendingConfirmation === "end-turn" ? (
-          <div className="confirmation-backdrop">
-            <section className="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="end_turn_title">
-              <strong id="end_turn_title">Are you sure?</strong>
-              <span>Your squad still has action points remaining.</span>
-              <div className="confirmation-actions">
-                <button type="button" onClick={() => applyCommand({ type: "CANCEL_END_TURN" })}>
-                  Cancel
-                </button>
-                <button type="button" className="confirmation-primary" onClick={() => applyCommand({ type: "CONFIRM_END_TURN" })}>
-                  End Turn
-                </button>
-              </div>
-            </section>
           </div>
         ) : null}
 

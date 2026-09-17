@@ -131,29 +131,21 @@ test("repeated floor retargeting updates direction without spending AP", () => {
   ]);
 });
 
-test("a second Overwatch command commits every remaining AP as shots", () => {
+test("a second Overwatch command cannot commit remaining AP", () => {
   for (const actionPoints of [1, 2, 3]) {
     let state = rules.createInitialBattle({ seed: 12345 });
     state = setUnit(state, "player-1", { actionPoints });
     state = beginOverwatch(state).state;
     state = aimOverwatch(state, "player-1", { column: 2, row: 6 }).state;
-    const confirmed = beginOverwatch(state);
-    const unit = getUnit(confirmed.state, "player-1");
-    const inspection = rules.getUnitInspection(confirmed.state, "player-1");
+    const repeated = beginOverwatch(state);
+    const unit = getUnit(repeated.state, "player-1");
 
-    assert.equal(confirmed.accepted, true);
-    assert.equal(unit.actionPoints, 0);
-    assert.equal(unit.overwatch.committedActionPoints, actionPoints);
-    assert.equal(unit.overwatch.shotsRemaining, actionPoints);
-    assert.equal(inspection.actionPoints, 0);
-    assert.equal(inspection.status, "Overwatch");
-    assert.deepEqual(inspection.overwatch, unit.overwatch);
-    assert.equal(confirmed.state.pendingAction, null);
-    assert.deepEqual(rules.getAvailableActions(confirmed.state, "player-1"), []);
-    assert.equal(
-      confirmed.events.some((event) => event.type === "overwatch-committed"),
-      true,
-    );
+    assert.equal(repeated.accepted, false);
+    assert.equal(repeated.reason, "action-already-targeting");
+    assert.equal(repeated.state, state);
+    assert.equal(unit.actionPoints, actionPoints);
+    assert.equal(unit.overwatch, null);
+    assert.equal(repeated.state.pendingAction.action, "overwatch");
   }
 });
 

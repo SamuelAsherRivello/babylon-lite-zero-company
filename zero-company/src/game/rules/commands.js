@@ -10,13 +10,15 @@ import {
   getAvailableActions,
   getLivingUnitIds,
   getUnit,
-  hasUsablePlayerActionPoints,
+  cellsEqual,
 } from "./selectors.js";
 import { isCellInBounds } from "./level.js";
+import { getReachableDestinations } from "./movement.js";
 import {
   createOverwatchCommitment,
   getOverwatchDirection,
 } from "./overwatch.js";
+import { getAttackPreview } from "./shoot.js";
 import { restartBattle } from "./state.js";
 
 function event(type, details = {}) {
@@ -110,17 +112,23 @@ function requestEndTurn(state, command) {
     return rejected(state, command, "wrong-phase");
   }
 
-  if (hasUsablePlayerActionPoints(state)) {
-    return accepted(
-      {
-        ...state,
-        pendingConfirmation: END_TURN_CONFIRMATION,
-      },
-      [event("end-turn-confirmation-requested")],
-    );
+  const events = [];
+  if (state.pendingAction) {
+    events.push(event("action-targeting-cancelled", {
+      unitId: state.pendingAction.unitId,
+      action: state.pendingAction.action,
+      reason: "end-turn-requested",
+    }));
   }
-
-  return beginEnemyTurn(state);
+  events.push(event("end-turn-confirmation-requested"));
+  return accepted(
+    {
+      ...state,
+      pendingConfirmation: END_TURN_CONFIRMATION,
+      pendingAction: null,
+    },
+    events,
+  );
 }
 
 function confirmEndTurn(state, command) {
@@ -153,11 +161,10 @@ function beginAction(state, command) {
 
   const priorAction = state.pendingAction;
   if (
-    command.action === ACTIONS.OVERWATCH &&
     priorAction?.unitId === command.unitId &&
-    priorAction.action === ACTIONS.OVERWATCH
+    priorAction.action === command.action
   ) {
-    return confirmOverwatch(state, command);
+    return rejected(state, command, "action-already-targeting");
   }
 
   if (!getAvailableActions(state, command.unitId).includes(command.action)) {
@@ -205,6 +212,86 @@ function beginAction(state, command) {
           : { unitId: command.unitId, action: command.action },
     },
     events,
+  );
+}
+
+function aimMove(state, command) {
+  if (state.phase !== BATTLE_PHASES.PLAYER || state.result !== null) {
+    return rejected(state, command, "wrong-phase");
+  }
+  if (state.pendingConfirmation !== null) {
+    return rejected(state, command, "input-locked");
+  }
+
+  const pendingAction = state.pendingAction;
+  if (
+    pendingAction?.action !== ACTIONS.MOVE ||
+    pendingAction.unitId !== command.unitId
+  ) {
+    return rejected(state, command, "move-not-targeting");
+  }
+
+  const destination = getReachableDestinations(state, command.unitId)
+    .find((candidate) => cellsEqual(candidate.cell, command.targetCell));
+  if (!destination) {
+    return rejected(state, command, "invalid-move-destination");
+  }
+
+  const targetCell = { ...destination.cell };
+  const path = destination.path.map((cell) => ({ ...cell }));
+  return accepted(
+    {
+      ...state,
+      pendingAction: {
+        ...pendingAction,
+        targetCell,
+        cost: destination.cost,
+        path,
+      },
+    },
+    [event("move-preview-updated", {
+      unitId: command.unitId,
+      targetCell,
+      cost: destination.cost,
+      path,
+    })],
+  );
+}
+
+function aimShoot(state, command) {
+  if (state.phase !== BATTLE_PHASES.PLAYER || state.result !== null) {
+    return rejected(state, command, "wrong-phase");
+  }
+  if (state.pendingConfirmation !== null) {
+    return rejected(state, command, "input-locked");
+  }
+
+  const pendingAction = state.pendingAction;
+  if (
+    pendingAction?.action !== ACTIONS.SHOOT ||
+    pendingAction.unitId !== command.unitId
+  ) {
+    return rejected(state, command, "shoot-not-targeting");
+  }
+
+  const preview = getAttackPreview(state, command.unitId, command.targetId);
+  if (!preview.selectable) {
+    return rejected(state, command, "invalid-shoot-target");
+  }
+
+  return accepted(
+    {
+      ...state,
+      pendingAction: {
+        ...pendingAction,
+        targetId: command.targetId,
+      },
+    },
+    [event("shoot-preview-updated", {
+      unitId: command.unitId,
+      targetId: command.targetId,
+      preview,
+    })],
   );
 }
 
@@ -415,6 +502,10 @@ export function dispatchBattleCommand(state, command) {
       return cancelEndTurn(state, command);
     case COMMANDS.BEGIN_ACTION:
       return beginAction(state, command);
+    case COMMANDS.AIM_MOVE:
+      return aimMove(state, command);
+    case COMMANDS.AIM_SHOOT:
+      return aimShoot(state, command);
     case COMMANDS.AIM_OVERWATCH:
       return aimOverwatch(state, command);
     case COMMANDS.CONFIRM_OVERWATCH:

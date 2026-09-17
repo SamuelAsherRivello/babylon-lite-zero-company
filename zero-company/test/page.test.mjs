@@ -88,7 +88,12 @@ test("renders the live tactical interface", async () => {
   assert.match(app, /className="unit-health"/);
   assert.match(app, /className="ap-dots"/);
   assert.match(app, /aria-label="Overwatch"/);
-  assert.match(styles, /grid-template-columns: repeat\(4, 78px\)/);
+  assert.match(app, /id="operation_confirmation"/);
+  assert.match(app, />\s*Confirm\?\s*<\/button>/);
+  assert.match(app, />\s*Cancel\s*<\/button>/);
+  assert.match(styles, /--action-column-width: 78px/);
+  assert.match(styles, /grid-template-columns: repeat\(4, var\(--action-column-width\)\)/);
+  assert.match(styles, /\.operation-confirmation \{[\s\S]*?grid-template-columns: repeat\(2, 1fr\)/);
 });
 
 test("keeps every unit inspectable across phases and terminal state", () => {

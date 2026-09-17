@@ -231,7 +231,7 @@ test("keeps dead units inspectable and movement-blocking without actions", () =>
   assert.equal(api.isCellOccupied(deadState, deadUnit.cell), true);
 });
 
-test("requires end-turn confirmation only while usable player AP remains", () => {
+test("requires end-turn confirmation regardless of usable player AP", () => {
   const api = requireRulesApi("createInitialBattle", "dispatchBattleCommand");
   const initial = api.createInitialBattle({ seed: 12345 });
   const requested = dispatch(api, initial, { type: "REQUEST_END_TURN" });
@@ -257,10 +257,14 @@ test("requires end-turn confirmation only while usable player AP remains", () =>
     }
     return unit;
   });
-  const immediate = dispatch(api, noUsableAp, { type: "REQUEST_END_TURN" });
+  const noApRequested = dispatch(api, noUsableAp, { type: "REQUEST_END_TURN" });
 
-  assert.equal(immediate.state.phase, "enemy");
-  assert.equal(immediate.state.pendingConfirmation, null);
+  assert.equal(noApRequested.state.phase, "player");
+  assert.equal(noApRequested.state.pendingConfirmation, "end-turn");
+  const noApConfirmed = dispatch(api, noApRequested.state, {
+    type: "CONFIRM_END_TURN",
+  });
+  assert.equal(noApConfirmed.state.phase, "enemy");
 });
 
 test("keeps battle state JSON-serializable and restart restores the seeded opening", () => {

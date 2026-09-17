@@ -132,6 +132,7 @@ a {
 
 .settings_option:focus-visible,
 .action-button:focus-visible,
+.operation-button:focus-visible,
 .corner a:focus-visible {
   outline: 2px solid #35e6f4;
   outline-offset: 2px;
@@ -373,23 +374,32 @@ a {
 }
 
 .action-bar {
+  --action-column-width: 78px;
+  --action-gap: 8px;
   position: absolute;
   z-index: 20;
   bottom: var(--ui-margin-y, 20px);
   left: 50%;
   display: grid;
-  grid-template-columns: repeat(4, 78px);
-  gap: 8px;
+  grid-template-columns: repeat(4, var(--action-column-width));
+  gap: var(--action-gap);
   transform: translateX(-50%);
   pointer-events: auto;
 }
 
-.action-button {
+.operation-confirmation {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--action-gap);
+}
+
+.action-button,
+.operation-button {
   appearance: none;
   display: grid;
   place-items: center;
   align-content: center;
-  width: 78px;
   height: 66px;
   gap: 4px;
   padding: 6px;
@@ -399,6 +409,24 @@ a {
   background: rgb(19 28 36 / 92%);
   box-shadow: 0 6px 16px rgb(0 0 0 / 28%);
   cursor: pointer;
+}
+
+.action-button {
+  width: var(--action-column-width);
+}
+
+.operation-button {
+  width: 100%;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.operation-button_primary {
+  border-color: #35e6f4;
+  color: #fff;
+  background: rgb(18 57 68 / 96%);
+  box-shadow: 0 0 0 2px rgb(53 230 244 / 30%);
 }
 
 .action-button:disabled {
@@ -586,15 +614,19 @@ a {
   }
 
   .action-bar {
-    grid-template-columns: repeat(4, 64px);
-    gap: 5px;
+    --action-column-width: 64px;
+    --action-gap: 5px;
   }
 
-  .action-button {
-    width: 64px;
+  .action-button,
+  .operation-button {
     height: 52px;
     gap: 2px;
     padding: 4px;
+  }
+
+  .operation-button {
+    font-size: 11px;
   }
 
   .action-button svg {

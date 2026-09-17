@@ -165,6 +165,29 @@ async function verifyHudAlignment(page) {
   assert.ok(actionBar.y >= frame.y && actionBar.y + actionBar.height <= frame.y + frame.height);
 }
 
+async function verifyOperationConfirmation(page) {
+  const confirm = await page.getByRole("button", { name: "Confirm?" }).boundingBox();
+  const cancel = await page.getByRole("button", { name: "Cancel" }).boundingBox();
+  const actions = await page.locator(".action-button").evaluateAll((buttons) => (
+    buttons.map((button) => {
+      const bounds = button.getBoundingClientRect();
+      return {
+        left: bounds.left,
+        right: bounds.right,
+        top: bounds.top,
+        height: bounds.height,
+      };
+    })
+  ));
+  assert.equal(actions.length, 4);
+  assert.ok(Math.abs(confirm.x - actions[0].left) < 1);
+  assert.ok(Math.abs(cancel.x + cancel.width - actions.at(-1).right) < 1);
+  assert.ok(Math.abs(confirm.height - actions[0].height) < 1);
+  assert.ok(Math.abs(cancel.height - actions[0].height) < 1);
+  assert.ok(confirm.y + confirm.height < actions[0].top);
+  assert.ok(cancel.y + cancel.height < actions[0].top);
+}
+
 async function verifyResultAndRestart(
   browser,
   scenario,
@@ -183,11 +206,11 @@ async function verifyResultAndRestart(
   if (scenario === "victory") {
     await selectUnit(page, "player-1");
     await page.getByRole("button", { name: /Shoot 1 AP/ }).click();
-    await selectUnit(page, "enemy-1");
+    await page.locator('[data-unit-id="enemy-1"]').click();
+    await page.getByRole("button", { name: "Confirm?" }).click();
   } else {
     await page.getByRole("button", { name: "End Turn" }).click();
-    await page.getByRole("dialog", { name: "Are you sure?" }).waitFor();
-    await page.getByRole("button", { name: "End Turn", exact: true }).last().click();
+    await page.getByRole("button", { name: "Confirm?" }).click();
   }
 
   const resultName = expectedResult === "victory" ? "Victory" : "Defeat";
@@ -306,7 +329,8 @@ async function verifyBlockedAudioFallback(browser) {
   await waitForScene(page);
   await selectUnit(page, "player-1");
   await page.getByRole("button", { name: /Shoot 1 AP/ }).click();
-  await selectUnit(page, "enemy-1");
+  await page.locator('[data-unit-id="enemy-1"]').click();
+  await page.getByRole("button", { name: "Confirm?" }).click();
   await page.getByRole("dialog", { name: "Victory" }).waitFor({ timeout: 10_000 });
   assert.deepEqual(monitor.problems, []);
   assert.deepEqual(monitor.externalRequests, []);
@@ -330,6 +354,7 @@ async function verifyPresentationFailureFallback(browser) {
   const target = targets.find((candidate) => candidate.cost === 1);
   const frame = await page.locator("#content_layer").boundingBox();
   await page.mouse.click(frame.x + target.x, frame.y + target.y);
+  await page.getByRole("button", { name: "Confirm?" }).click();
   await page.waitForFunction(([column, row]) => {
     const state = JSON.parse(document.querySelector("#game_canvas").dataset.battleState);
     const unit = state.units.find((candidate) => candidate.id === "player-2");
@@ -366,8 +391,9 @@ async function verifyReducedMotionPresentation(browser) {
   );
   const target = targets.find((candidate) => candidate.cost === 1 && candidate.steps >= 3);
   const frame = await page.locator("#content_layer").boundingBox();
-  const startedAt = Date.now();
   await page.mouse.click(frame.x + target.x, frame.y + target.y);
+  const startedAt = Date.now();
+  await page.getByRole("button", { name: "Confirm?" }).click();
   await page.waitForFunction(() => {
     const state = JSON.parse(document.querySelector("#game_canvas").dataset.battleState);
     return state.units.find((unit) => unit.id === "player-2").actionPoints === 2;
@@ -469,6 +495,23 @@ try {
     mutedMoveFrame.x + mutedMoveTarget.x,
     mutedMoveFrame.y + mutedMoveTarget.y,
   );
+  await desktop.locator("#operation_confirmation").waitFor();
+  assert.equal(await desktop.getByRole("button", { name: "Confirm?" }).count(), 1);
+  assert.equal(await desktop.getByRole("button", { name: "Cancel" }).count(), 1);
+  await verifyOperationConfirmation(desktop);
+  const stagedMutedMove = JSON.parse(
+    await desktop.locator("#game_canvas").getAttribute("data-battle-state"),
+  );
+  assert.equal(stagedMutedMove.units.find((unit) => unit.id === "player-2").actionPoints, 3);
+  assert.deepEqual(stagedMutedMove.pendingAction.targetCell, {
+    column: mutedMoveTarget.column,
+    row: mutedMoveTarget.row,
+  });
+  await desktop.screenshot({
+    path: `${evidenceDirectory}/confirmation-desktop.png`,
+    fullPage: true,
+  });
+  await desktop.getByRole("button", { name: "Confirm?" }).click();
   await desktop.waitForFunction(() => {
     const state = JSON.parse(document.querySelector("#game_canvas").dataset.battleState);
     return state.units.find((unit) => unit.id === "player-2").actionPoints === 2;
@@ -535,9 +578,34 @@ try {
   );
   assert.ok(oneApTarget?.steps >= 3, "Move targeting must expose a multi-step one-AP destination.");
   const movementFrame = await desktop.locator("#content_layer").boundingBox();
+  const alternateMoveTarget = movementTargets.find((target) => (
+    target.cost === 1 &&
+    (target.column !== oneApTarget.column || target.row !== oneApTarget.row)
+  ));
+  assert.ok(alternateMoveTarget, "Move targeting must expose a retargeting alternative.");
+  await desktop.mouse.click(
+    movementFrame.x + alternateMoveTarget.x,
+    movementFrame.y + alternateMoveTarget.y,
+  );
+  await desktop.waitForFunction(([column, row]) => {
+    const state = JSON.parse(document.querySelector("#game_canvas").dataset.battleState);
+    return state.pendingAction?.targetCell?.column === column &&
+      state.pendingAction?.targetCell?.row === row;
+  }, [alternateMoveTarget.column, alternateMoveTarget.row]);
   await desktop.mouse.click(movementFrame.x + oneApTarget.x, movementFrame.y + oneApTarget.y);
+  await desktop.locator("#operation_confirmation").waitFor();
+  await verifyOperationConfirmation(desktop);
+  const stagedMove = JSON.parse(
+    await desktop.locator("#game_canvas").getAttribute("data-battle-state"),
+  );
+  assert.equal(stagedMove.units.find((unit) => unit.id === "player-2").actionPoints, 3);
+  assert.deepEqual(stagedMove.pendingAction.targetCell, {
+    column: oneApTarget.column,
+    row: oneApTarget.row,
+  });
+  assert.equal(await desktop.locator(".action-button:enabled").count(), 0);
+  await desktop.getByRole("button", { name: "Confirm?" }).click();
   await desktop.locator('#game_canvas[data-movement-destination-count="0"]').waitFor();
-  await desktop.waitForFunction(() => document.querySelector('[data-action="move"]').disabled);
   await desktop.waitForFunction(() => {
     const states = JSON.parse(document.querySelector("#game_canvas").dataset.unitPresentationStates ?? "[]");
     return states.find((unit) => unit.id === "player-2")?.status === "moving";
@@ -557,11 +625,24 @@ try {
   await desktop.getByRole("button", { name: /Shoot 1 AP/ }).click();
   await desktop.locator('.unit-hud[data-valid-target="true"]').first().waitFor();
   await desktop.locator(".attack-preview_blocked").first().waitFor();
-  const shootTargetId = await desktop
+  const validShootTargetIds = await desktop
     .locator('.unit-hud[data-valid-target="true"]')
-    .first()
-    .getAttribute("data-unit-id");
-  await selectUnit(desktop, shootTargetId);
+    .evaluateAll((targets) => targets.map((target) => target.dataset.unitId));
+  let shootTargetId = validShootTargetIds[0];
+  await desktop.locator(`[data-unit-id="${shootTargetId}"]`).click();
+  if (validShootTargetIds.length > 1) {
+    shootTargetId = validShootTargetIds[1];
+    await desktop.locator(`[data-unit-id="${shootTargetId}"]`).click();
+  }
+  await desktop.locator("#operation_confirmation").waitFor();
+  await verifyOperationConfirmation(desktop);
+  const stagedShot = JSON.parse(
+    await desktop.locator("#game_canvas").getAttribute("data-battle-state"),
+  );
+  assert.equal(stagedShot.pendingAction.targetId, shootTargetId);
+  assert.equal(stagedShot.units.find((unit) => unit.id === "player-2").actionPoints, 2);
+  assert.equal(stagedShot.units.find((unit) => unit.id === shootTargetId).health, 10);
+  await desktop.getByRole("button", { name: "Confirm?" }).click();
   await desktop.waitForFunction(() => Boolean(document.querySelector("#game_canvas").dataset.lastShot));
   let shotEvidence = JSON.parse(
     await desktop.locator("#game_canvas").getAttribute("data-last-shot"),
@@ -677,7 +758,10 @@ try {
     await desktop.locator("#game_canvas").getAttribute("data-battle-state"),
   );
   assert.equal(aimedBattle.units.find((unit) => unit.id === "player-3").actionPoints, 3);
-  await desktop.getByRole("button", { name: /Overwatch 3 AP/ }).click();
+  await desktop.locator("#operation_confirmation").waitFor();
+  await verifyOperationConfirmation(desktop);
+  assert.equal(await desktop.getByRole("button", { name: /Overwatch 3 AP/ }).isDisabled(), true);
+  await desktop.getByRole("button", { name: "Confirm?" }).click();
   await desktop.waitForFunction(() => {
     const state = JSON.parse(document.querySelector("#game_canvas").dataset.battleState);
     return state.units.find((unit) => unit.id === "player-3").overwatch?.shotsRemaining === 3;
@@ -713,15 +797,15 @@ try {
   assert.equal(pendingActionBeforeEndTurn, "overwatch");
 
   await desktop.getByRole("button", { name: "End Turn" }).click();
-  await desktop.getByRole("dialog", { name: "Are you sure?" }).waitFor();
+  await desktop.locator("#operation_confirmation").waitFor();
   await desktop.getByRole("button", { name: "Cancel" }).click();
-  await desktop.getByRole("dialog", { name: "Are you sure?" }).waitFor({ state: "detached" });
+  await desktop.locator("#operation_confirmation").waitFor({ state: "detached" });
   await desktop.getByText("PLAYER TURN", { exact: true }).waitFor();
-  assert.equal(await desktop.locator(".action-button_active").getAttribute("data-action"), pendingActionBeforeEndTurn);
+  assert.equal(await desktop.locator(".action-button_active").count(), 0);
 
   await desktop.getByRole("button", { name: "End Turn" }).click();
-  await desktop.getByRole("dialog", { name: "Are you sure?" }).waitFor();
-  await desktop.getByRole("button", { name: "End Turn", exact: true }).last().click();
+  await desktop.locator("#operation_confirmation").waitFor();
+  await desktop.getByRole("button", { name: "Confirm?" }).click();
   await desktop.getByText("ENEMY TURN", { exact: true }).waitFor();
   await desktop.locator('.unit-hud_active[data-unit-id="enemy-1"]').waitFor();
   assert.equal(await desktop.locator(".action-button:enabled").count(), 0);
@@ -890,6 +974,17 @@ try {
     mobileFrame.x + mobileMoveTarget.x,
     mobileFrame.y + mobileMoveTarget.y,
   );
+  await mobile.locator("#operation_confirmation").waitFor();
+  await verifyOperationConfirmation(mobile);
+  const stagedMobileMove = JSON.parse(
+    await mobile.locator("#game_canvas").getAttribute("data-battle-state"),
+  );
+  assert.equal(stagedMobileMove.units.find((unit) => unit.id === "player-1").actionPoints, 3);
+  await mobile.screenshot({
+    path: `${evidenceDirectory}/confirmation-mobile.png`,
+    fullPage: true,
+  });
+  await mobile.getByRole("button", { name: "Confirm?" }).tap();
   await mobile.waitForFunction(() => {
     const state = JSON.parse(document.querySelector("#game_canvas").dataset.battleState);
     return state.units.find((unit) => unit.id === "player-1").actionPoints === 2;
@@ -901,6 +996,9 @@ try {
   const mobileShootTarget = mobile.locator('.unit-hud[data-valid-target="true"]').first();
   await mobileShootTarget.waitFor();
   await mobileShootTarget.tap();
+  await mobile.locator("#operation_confirmation").waitFor();
+  await verifyOperationConfirmation(mobile);
+  await mobile.getByRole("button", { name: "Confirm?" }).tap();
   await mobile.locator('#game_canvas[data-shot-status="complete"]').waitFor();
 
   await mobile.locator('[data-unit-id="player-3"]').tap();
@@ -924,7 +1022,9 @@ try {
     const state = JSON.parse(document.querySelector("#game_canvas").dataset.battleState);
     return state.pendingAction?.action === "overwatch" && state.pendingAction.targetCell;
   });
-  await mobile.getByRole("button", { name: /Overwatch 3 AP/ }).tap();
+  await mobile.locator("#operation_confirmation").waitFor();
+  await verifyOperationConfirmation(mobile);
+  await mobile.getByRole("button", { name: "Confirm?" }).tap();
   await mobile.waitForFunction(() => {
     const state = JSON.parse(document.querySelector("#game_canvas").dataset.battleState);
     return state.units.find((unit) => unit.id === "player-3").overwatch?.shotsRemaining === 3;
