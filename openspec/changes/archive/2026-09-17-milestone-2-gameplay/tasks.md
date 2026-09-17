@@ -43,5 +43,5 @@
 
 - [x] 6.1 Update README gameplay, controls, mobile orientation, offline behavior, asset attribution links, and visible version; verify every documented command and current UI claim against the checkout and obtain Agent 3 PASS.
 - [x] 6.2 Complete the template delivery checklist, verify OpenSpec implementation consistency and strict validation, and have Agent 3 issue final PASS only after every task and all five checkpoint records are complete.
-- [ ] 6.3 Sync and archive `milestone-2-gameplay`, verify main specs and archives, then commit only scoped project files and perform a normal non-force push after confirming no secret or unrelated file is staged.
+- [x] 6.3 Sync and archive `milestone-2-gameplay`, verify main specs and archives, then commit only scoped project files and perform a normal non-force push after confirming no secret or unrelated file is staged.
 - [ ] 6.4 Create a new, non-overwriting GitHub release whose version matches the README and repository version file, verify the public repository and release page show that version, and retain the final Vite URL for local play.
